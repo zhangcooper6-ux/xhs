@@ -21,6 +21,9 @@ import json
 import time
 import logging
 import requests
+import urllib3
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 import config
 from .xhs_parser import NoteData
@@ -533,12 +536,28 @@ def _pick_video_url(aweme):
     return None
 
 
+def _extract_frame_fallback(video_path, out_path, time_ratio=0.3):
+    """从本地视频抽取一帧作为封面兜底。"""
+    try:
+        from core import cover_gen
+        res = cover_gen.extract_video_frame(video_path, out_path, time_ratio=time_ratio)
+        if res and os.path.exists(out_path) and os.path.getsize(out_path) > 0:
+            return True
+    except Exception as e:
+        logger.warning("从视频抽帧生成封面失败: %s", e)
+    return False
+
+
 def _download_file(sess, url, save_path):
     """下载文件（带重试）。"""
+    headers = {
+        "User-Agent": MOBILE_UA,
+        "Referer": "https://www.douyin.com/",
+        "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+    }
     for attempt in range(config.MAX_RETRIES):
         try:
-            r = sess.get(url, stream=True, timeout=config.REQUEST_TIMEOUT,
-                        headers={"User-Agent": MOBILE_UA, "Referer": "https://www.douyin.com/"})
+            r = sess.get(url, stream=True, timeout=config.REQUEST_TIMEOUT, headers=headers)
             r.raise_for_status()
             with open(save_path, "wb") as f:
                 for chunk in r.iter_content(chunk_size=65536):
@@ -546,8 +565,18 @@ def _download_file(sess, url, save_path):
                         f.write(chunk)
             return True
         except Exception as e:
-            logger.warning("下载失败 (attempt %d/%d): %s",
-                           attempt + 1, config.MAX_RETRIES, e)
+            logger.warning("下载尝试 %d/%d 异常 (%s)，尝试 SSL 降级请求...", attempt + 1, config.MAX_RETRIES, e)
+            try:
+                r = sess.get(url, stream=True, timeout=config.REQUEST_TIMEOUT, headers=headers, verify=False)
+                r.raise_for_status()
+                with open(save_path, "wb") as f:
+                    for chunk in r.iter_content(chunk_size=65536):
+                        if chunk:
+                            f.write(chunk)
+                logger.info("SSL 降级下载成功: %s", save_path)
+                return True
+            except Exception as e2:
+                logger.warning("SSL 降级下载尝试 %d/%d 仍失败: %s", attempt + 1, config.MAX_RETRIES, e2)
             time.sleep(1)
     return False
 
@@ -739,25 +768,35 @@ def parse_note(note_input):
             raise RuntimeError(f"视频下载失败: {video_url}")
     logger.info("下载完成: %s (%d bytes)", local_path, os.path.getsize(local_path))
 
-    # 下载原视频封面（无论是否后续生成新封面都保存，便于查阅/复用）
-    # 抖音图片 CDN（douyinpic.com）会拦截 requests 的 TLS 指纹（SSLEOFError），
-    # 封面优先用 playwright 下载（视频已通过 requests 下载成功，说明视频 CDN 不拦截）
-    cover_local = None
+    # 下载原视频封面（优先网络下载；若网络拦截则自动从已下载视频文件截取抽帧作为封面兜底）
+    cover_local = os.path.join(dl_dir, "cover_original.jpg")
+    cover_downloaded = False
+
     if cover_url:
-        cover_local = os.path.join(dl_dir, "cover_original.jpg")
         logger.info("下载原视频封面到: %s", cover_local)
         if _download_with_playwright(cover_url, cover_local):
             logger.info("原封面下载完成(playwright): %s (%d bytes)",
                         cover_local, os.path.getsize(cover_local))
+            cover_downloaded = True
         else:
             # playwright 失败 → 尝试 requests 兜底
-            logger.info("playwright 下载封面失败，尝试 requests 下载")
+            logger.info("playwright 下载封面失败，尝试 requests 降级下载")
             if _download_file(sess, cover_url, cover_local):
                 logger.info("原封面下载完成(requests): %s (%d bytes)",
                             cover_local, os.path.getsize(cover_local))
+                cover_downloaded = True
             else:
-                logger.warning("原封面下载失败: %s", cover_url)
-                cover_local = None
+                logger.warning("网络下载原封面失败: %s", cover_url)
+
+    # 如果网络下载失败（或没有 cover_url），直接从本地已下载的视频文件抽帧作为封面！
+    if not cover_downloaded or not os.path.exists(cover_local) or os.path.getsize(cover_local) == 0:
+        logger.info("使用本地已下载的视频文件抽帧生成封面: %s", local_path)
+        if _extract_frame_fallback(local_path, cover_local, time_ratio=0.3):
+            logger.info("视频抽帧生成封面成功: %s (%d bytes)",
+                        cover_local, os.path.getsize(cover_local))
+        else:
+            logger.warning("视频抽帧生成封面失败，跳过原封面保存")
+            cover_local = None
 
     # 构造 NoteData 兼容对象
     note_id = f"dy_{video_id}"

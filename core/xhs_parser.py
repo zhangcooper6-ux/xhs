@@ -14,6 +14,9 @@ import json
 import time
 import logging
 import requests
+import urllib3
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 import config
 
@@ -360,13 +363,12 @@ def _build_media_items(note):
 
 
 def _download_file(sess, url, save_path):
-    """下载文件到指定路径。"""
+    """下载文件到指定路径（带重试与 SSL 降级）。"""
     if not url:
         return False
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
     for attempt in range(config.MAX_RETRIES):
         try:
-            # 部分图片用备份域名
             if url.startswith("//"):
                 url = "https:" + url
             if url.startswith("http://"):
@@ -379,8 +381,19 @@ def _download_file(sess, url, save_path):
                             f.write(chunk)
                 return True
             logger.warning("下载失败 %s -> %s", url, resp.status_code)
-        except requests.RequestException as e:
-            logger.warning("下载异常(%d/%d): %s", attempt + 1, config.MAX_RETRIES, e)
+        except Exception as e:
+            logger.warning("下载异常(%d/%d): %s，尝试 SSL 降级请求...", attempt + 1, config.MAX_RETRIES, e)
+            try:
+                resp = sess.get(url, timeout=60, stream=True, headers=config.HEADERS, verify=False)
+                if resp.status_code == 200:
+                    with open(save_path, "wb") as f:
+                        for chunk in resp.iter_content(8192):
+                            if chunk:
+                                f.write(chunk)
+                    logger.info("SSL 降级下载成功: %s", save_path)
+                    return True
+            except Exception as e2:
+                logger.warning("SSL 降级下载(%d/%d) 仍失败: %s", attempt + 1, config.MAX_RETRIES, e2)
         time.sleep(1)
     return False
 
@@ -482,15 +495,28 @@ def parse_note(note_input):
             item["local"] = None
             logger.error("下载失败: %s", item["url"])
 
-        # 视频笔记：下载原视频封面（无论是否后续生成新封面都保存，便于查阅/复用）
-        if item["kind"] == "video" and item.get("cover"):
+        # 视频笔记：下载原视频封面（优先网络下载；网络失败则从本地视频截取抽帧作为封面兜底）
+        if item["kind"] == "video":
             cover_local = os.path.join(dl_dir, "cover_original.jpg")
-            logger.info("下载原视频封面 %d: %s", idx, item["cover"])
-            if _download_file(sess, item["cover"], cover_local):
-                item["cover_local"] = cover_local
-                logger.info("原封面下载完成: %s", cover_local)
-            else:
-                logger.warning("原封面下载失败: %s", item["cover"])
+            cover_ok = False
+            if item.get("cover"):
+                logger.info("下载原视频封面 %d: %s", idx, item["cover"])
+                if _download_file(sess, item["cover"], cover_local):
+                    item["cover_local"] = cover_local
+                    logger.info("原封面下载完成: %s", cover_local)
+                    cover_ok = True
+                else:
+                    logger.warning("原封面下载失败: %s", item["cover"])
+
+            if not cover_ok and item.get("local") and os.path.exists(item["local"]):
+                try:
+                    from core import cover_gen
+                    logger.info("从本地已下载视频抽帧作为封面兜底...")
+                    if cover_gen.extract_video_frame(item["local"], cover_local, time_ratio=0.3):
+                        item["cover_local"] = cover_local
+                        logger.info("视频抽帧生成封面成功: %s", cover_local)
+                except Exception as e:
+                    logger.warning("视频抽帧生成封面失败: %s", e)
 
     # 保存文本内容
     text_path = os.path.join(dl_dir, "content.json")
