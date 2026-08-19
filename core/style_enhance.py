@@ -284,8 +284,10 @@ def _build_filter_complex(w, h, duration, params, creative=None,
     _tmp_dir = tmp_dir or tempfile.gettempdir()
 
     # === 风格增强层 ===
-    # 前景：缩放 + 调色 + 磨皮 + 锐化
-    fg_scale = (f"scale={target_w}:{target_h}:force_original_aspect_ratio=decrease,"
+    # 前景：高精度 Lanczos 缩放 + 调色 + 自然饱和度 + 空域精细降噪 + 3x3 锐化
+    hd_enhance = params.get("hd_enhance", True)
+    scale_flags = "flags=lanczos+accurate_rnd+full_chroma_int"
+    fg_scale = (f"scale={target_w}:{target_h}:force_original_aspect_ratio=decrease:{scale_flags},"
                 f"setsar=1")
 
     eq_parts = []
@@ -305,12 +307,19 @@ def _build_filter_complex(w, h, duration, params, creative=None,
         fg_scale += (f",colorbalance=rs={wv}:gs={wv*0.3}:bs={-wv}:"
                      f"rm={wv*0.5}:gm={wv*0.2}:bm={-wv*0.4}")
 
+    vibrance = params.get("vibrance", 0.15 if hd_enhance else 0)
+    if vibrance and vibrance > 0:
+        fg_scale += f",vibrance=intensity={vibrance:.2f}"
+
     if params.get("denoise", 0) > 0:
         dn = params["denoise"]
         fg_scale += f",hqdn3d={dn}:{dn*0.7}:{dn*2}:{dn*1.5}"
 
     if params.get("unsharp", False):
-        fg_scale += ",unsharp=5:5:0.6:5:5:0.0"
+        if hd_enhance:
+            fg_scale += ",unsharp=3:3:0.45:3:3:0.25"
+        else:
+            fg_scale += ",unsharp=5:5:0.6:5:5:0.0"
 
     # 判断原视频比例是否与目标画面接近：若接近则不做模糊背景叠加（避免"双层"效果）
     # 模糊背景设计用于横屏/方形视频转竖屏时填充上下空白，竖屏转竖屏反而会产生双层重影
@@ -326,7 +335,7 @@ def _build_filter_complex(w, h, duration, params, creative=None,
                     src_ratio, tgt_ratio)
     else:
         # 比例不同：用模糊背景填充画面（保持原比例前景居中）
-        bg_scale = (f"scale={target_w}:{target_h}:force_original_aspect_ratio=increase,"
+        bg_scale = (f"scale={target_w}:{target_h}:force_original_aspect_ratio=increase:{scale_flags},"
                     f"setsar=1,"
                     f"boxblur={params.get('blur_radius', 20)}:{params.get('blur_power', 2)}")
         if params.get("darken_bg", 0) > 0:
@@ -833,11 +842,16 @@ def enhance_video(src_path, dst_path, params=None, creative=None,
     cmd += ["-filter_complex", fc, "-map", f"[{out_label}]", "-map", "0:a?"]
     cmd += [
         "-c:v", "libx264",
-        "-preset", "medium",
-        "-crf", str(params.get("crf", 18)),
+        "-preset", params.get("preset", "medium"),
+        "-crf", str(params.get("crf", 16)),
         "-pix_fmt", "yuv420p",
+        "-color_range", "tv",
+        "-colorspace", "bt709",
+        "-color_primaries", "bt709",
+        "-color_trc", "bt709",
+        "-x264-params", "me=hex:subme=7:no-fast-pskip=0:aq-mode=2:aq-strength=1.0",
         "-c:a", "aac",
-        "-b:a", "192k",
+        "-b:a", "256k",
         "-map_metadata", "-1",
         "-movflags", "+faststart",
         dst_path,

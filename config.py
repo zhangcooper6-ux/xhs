@@ -45,7 +45,7 @@ MAX_RETRIES = 3
 VIDEO_DEDUP = {
     "mirror": False,           # 水平镜像（默认关闭：会颠倒视频里的文字，破坏可读性；如需开启用 --mirror）
     "speed": 1.06,             # 变速（1.0=不变；1.06=加快6%）
-    "crop_ratio": 0.06,        # 四边裁剪比例（0.06=各裁掉6%，关闭镜像后加强）
+    "crop_ratio": 0.06,        # 四边裁剪比例（0.06=各裁掉6%，裁后放大回原尺寸）
     "scale_factor": 1.06,      # 缩放系数（裁剪后放大回原尺寸）
     "brightness": 0.04,        # 亮度调整 (-1.0~1.0)
     "contrast": 1.05,          # 对比度 (1.0=不变)
@@ -53,14 +53,16 @@ VIDEO_DEDUP = {
     "gamma": 1.03,             # 伽马
     "audio_pitch": True,       # 音频变调（避免音轨查重）
     "audio_tempo": 1.06,       # 音频变速（与视频同步）
-    "noise_strength": 8,       # 轻微噪点强度 (0~100)
-    "unsharp": True,           # 轻微锐化
+    "noise_strength": 2,       # 超精细像素抖动 (2)，既打破 Hash 查重又不影响视觉画质
+    "unsharp": True,           # 精细微观锐化（修复原视频模糊感）
+    "hd_enhance": True,        # 画质更胜原视频模式：高清 Lanczos 采样 + Vibrance 智能色彩 + 微观对比度
+    "vibrance": 0.12,          # 自然饱和度 Boost（智能提升暗淡色彩，保护自然肤色）
     "strip_metadata": True,    # 去除元数据
     "reencode": True,          # 强制重编码
     "vcodec": "libx264",
     "acodec": "aac",
-    "crf": 18,
-    "preset": "fast",          # x264 编码预设（ultrafast~veryslow；fast 比 medium 快约 2x，质量略降但对去重足够）
+    "crf": 16,                 # 提升至 CRF 16 超清无损级画质（数值越小画质越高）
+    "preset": "medium",        # x264 编码预设 (medium 相比 fast 保留更多纹理细节)
 }
 
 # ---------- 图片去重参数 ----------
@@ -73,8 +75,9 @@ IMAGE_DEDUP = {
     "contrast": 1.06,          # 对比度因子
     "saturation": 1.12,        # 饱和度因子
     "sharpness": 1.18,         # 锐度因子
-    "noise_amount": 5,         # 轻微噪点
-    "quality": 95,             # JPEG 质量
+    "noise_amount": 3,         # 超轻微噪点
+    "quality": 98,             # 提升至 JPEG 98 超清画质
+    "subsampling": 0,          # 4:4:4 全色度无损采样（无色彩边缘模糊）
     "strip_exif": True,        # 去除 EXIF
     "format": "JPEG",          # 输出格式 JPEG/PNG
     "reencode": True,          # 强制重编码（破坏原始哈希）
@@ -87,7 +90,7 @@ LIVE_DEDUP = {
 }
 
 # ---------- 小红书风格增强参数（去重后的第二步）----------
-# 目标：让成品更符合小红书爆款调性（9:16竖屏 / 暖色 / 明亮 / 鲜艳 / 磨皮）
+# 目标：让成品更符合小红书爆款调性（9:16竖屏 / 暖色 / 明亮 / 鲜艳 / 质感超清）
 XHS_STYLE = {
     # 目标尺寸（9:16 竖屏，小红书推荐）
     "target_width": 1080,
@@ -98,11 +101,13 @@ XHS_STYLE = {
     "brightness": 0.05,        # 提亮 (-1~1)
     "contrast": 1.08,          # 对比度
     "saturation": 1.15,        # 饱和度（小红书偏好鲜艳）
+    "vibrance": 0.15,          # 智能自然饱和度提升
     "gamma": 1.02,             # 伽马（轻微提亮暗部）
 
-    # 磨皮质感（让皮肤/画面更柔和通透）
-    "denoise": 3,              # hqdn3d 强度 0~10（3=轻微磨皮）
-    "unsharp": True,           # 锐化
+    # 磨皮质感与画质重塑
+    "denoise": 1.0,            # 柔和轻量级空域降噪 1.0（消除压缩块效应且保护皮肤与毛发纹理）
+    "unsharp": True,           # 3x3 精细微观锐化
+    "hd_enhance": True,        # 超清画质突破模式
 
     # 背景（9:16 填充用模糊背景）
     "blur_radius": 24,         # 背景模糊半径
@@ -127,7 +132,8 @@ XHS_STYLE = {
     "watermark_y": "h-th-{fontsize}-20",
 
     # 编码
-    "crf": 18,
+    "crf": 16,
+    "preset": "medium",
 }
 
 # 风格预设（命令行 --style-profile xxx 切换）

@@ -92,8 +92,10 @@ def probe_resolution(src_path):
 
 
 def _build_filter_chain(params, w, h):
-    """构建视频滤镜链。"""
+    """构建视频滤镜链（含画质重塑与高精度 Lanczos 缩放）。"""
     vf = []
+    hd_enhance = params.get("hd_enhance", True)
+    scale_flags = "flags=lanczos+accurate_rnd+full_chroma_int"
 
     # 裁剪四边
     crop_ratio = params.get("crop_ratio", 0.0)
@@ -106,12 +108,16 @@ def _build_filter_chain(params, w, h):
         cw = w - 2 * cx
         ch = h - 2 * cy
         vf.append(f"crop={cw}:{ch}:{cx}:{cy}")
-        # 放大回原尺寸
-        vf.append(f"scale={w}:{h}")
+        # 高精度 Lanczos 放大回原尺寸
+        vf.append(f"scale={w}:{h}:{scale_flags}")
 
     # 镜像
     if params.get("mirror", True):
         vf.append("hflip")
+
+    # HD 空域降噪：精细去除原视频压缩块效应，保护边缘与纹理细节
+    if hd_enhance:
+        vf.append("hqdn3d=1.0:1.0:2.0:2.0")
 
     # 色彩调整
     eq_parts = []
@@ -126,17 +132,25 @@ def _build_filter_chain(params, w, h):
     if eq_parts:
         vf.append("eq=" + ":".join(eq_parts))
 
-    # 噪点
-    noise = params.get("noise_strength", 0)
+    # 自然饱和度 Boost：避免肤色过饱和，智能提升平淡背景色彩
+    vibrance = params.get("vibrance", 0.12 if hd_enhance else 0)
+    if vibrance and vibrance > 0:
+        vf.append(f"vibrance=intensity={vibrance:.2f}")
+
+    # 噪点：超精细像素微扰 (2)，既能破坏 Hash 查重又不损伤肉眼画质
+    noise = params.get("noise_strength", 2 if hd_enhance else 0)
     if noise and noise > 0:
         vf.append(f"noise=alls={noise}:allf=t")
 
-    # 锐化
+    # 精细 3x3 微观锐化：提升视频透度与细节（无边缘环状重影光晕）
     if params.get("unsharp", False):
-        vf.append("unsharp=5:5:0.8:5:5:0.0")
+        if hd_enhance:
+            vf.append("unsharp=3:3:0.45:3:3:0.25")
+        else:
+            vf.append("unsharp=5:5:0.6:5:5:0.0")
 
-    # 偶数尺寸保证
-    vf.append("scale=trunc(iw/2)*2:trunc(ih/2)*2")
+    # 偶数尺寸保证 + 高精度 Lanczos 缩放
+    vf.append(f"scale=trunc(iw/2)*2:trunc(ih/2)*2:{scale_flags}")
 
     return ",".join(vf) if vf else None
 
@@ -208,18 +222,23 @@ def dedup_video(src_path, dst_path, params=None):
     if af:
         cmd += ["-af", af]
 
-    # 编码参数
+    # 编码参数（超清无损 CRF 16 + 高精度 BT.709 色彩矩阵与像素排列）
     cmd += [
         "-c:v", params.get("vcodec", "libx264"),
-        "-preset", params.get("preset", "fast"),
-        "-crf", str(params.get("crf", 18)),
+        "-preset", params.get("preset", "medium"),
+        "-crf", str(params.get("crf", 16)),
         "-pix_fmt", "yuv420p",
+        "-color_range", "tv",
+        "-colorspace", "bt709",
+        "-color_primaries", "bt709",
+        "-color_trc", "bt709",
+        "-x264-params", "me=hex:subme=7:no-fast-pskip=0:aq-mode=2:aq-strength=1.0",
         # 强制固定帧率 30fps，避免 setpts 变速后帧率异常（如 31.83fps）导致时长错乱
         "-r", str(params.get("output_fps", 30)),
         # 视频同步模式：CFR 固定帧率，丢弃/重复帧以匹配输出帧率
         "-vsync", "cfr",
         "-c:a", params.get("acodec", "aac"),
-        "-b:a", "192k",
+        "-b:a", "256k",
     ]
 
     # 元数据处理

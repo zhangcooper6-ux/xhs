@@ -106,14 +106,15 @@ def dedup_image(src_path, dst_path, params=None):
     fmt = params.get("format", "JPEG").upper()
     if fmt == "JPG":
         fmt = "JPEG"
-    quality = params.get("quality", 95)
+    quality = params.get("quality", 98)
     strip_exif = params.get("strip_exif", True)
 
     os.makedirs(os.path.dirname(dst_path), exist_ok=True)
     save_kwargs = {"quality": quality, "optimize": True}
     if fmt == "JPEG":
         save_kwargs["progressive"] = True
-        save_kwargs["subsampling"] = 1  # 4:2:2
+        subsampling = params.get("subsampling", 0)  # 0 = 4:4:4 全色度无损采样（无字幕/轮廓边缘模糊）
+        save_kwargs["subsampling"] = subsampling
 
     # 根据目标扩展名决定格式
     ext = os.path.splitext(dst_path)[1].lower()

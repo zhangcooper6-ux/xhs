@@ -541,8 +541,12 @@ def main(argv=None):
                         help="x264 编码预设（默认 fast）。越快文件越大但耗时短；越慢文件越小但耗时长。"
                              "长视频超时可改 ultrafast/veryfast；追求小文件可改 medium/slow")
     parser.add_argument("--crf", type=int, default=None,
-                        help="x264 画质（默认 18，范围 0-51）。数值越小画质越好文件越大；"
-                             "23 约 medium 质量；28 仍可接受但文件更小")
+                        help="x264 画质（默认 16，范围 0-51）。数值越小画质越好文件越大；"
+                             "16 为超清无损级画质；23 约 medium 质量；28 仍可接受但文件更小")
+    parser.add_argument("--hd-enhance", action="store_true", default=None,
+                        help="开启画质提升超越原视频模式（高精度 Lanczos 缩放 + Vibrance 智能色彩 + 3x3 精细微观锐化）")
+    parser.add_argument("--no-hd-enhance", action="store_true",
+                        help="关闭画质提升超越原视频模式")
     parser.add_argument("--no-enhance", action="store_true",
                         help="关闭小红书风格增强（只去重，不做竖屏适配/暖色/磨皮）")
     parser.add_argument("--style-profile", default="default",
@@ -1195,6 +1199,10 @@ def main(argv=None):
         vparams["audio_tempo"] = args.speed
     if args.mirror:
         vparams["mirror"] = True
+    if args.hd_enhance:
+        vparams["hd_enhance"] = True
+    elif args.no_hd_enhance:
+        vparams["hd_enhance"] = False
     if args.preset is not None:
         vparams["preset"] = args.preset
     if args.crf is not None:
@@ -1226,6 +1234,15 @@ def main(argv=None):
 
     # 风格增强参数（默认开启，--no-enhance 关闭）
     enhance_params = None if args.no_enhance else dict(config.STYLE_PROFILES.get(args.style_profile, config.XHS_STYLE))
+    if enhance_params:
+        if args.hd_enhance:
+            enhance_params["hd_enhance"] = True
+        elif args.no_hd_enhance:
+            enhance_params["hd_enhance"] = False
+        if args.crf is not None:
+            enhance_params["crf"] = max(0, min(51, args.crf))
+        if args.preset is not None:
+            enhance_params["preset"] = args.preset
     creative_params = _build_creative_params(args)
     watermark = args.watermark
     pip_path = os.path.abspath(args.pip) if args.pip else None
