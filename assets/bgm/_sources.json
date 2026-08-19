@@ -1,0 +1,14 @@
+[
+  {
+    "url": "https://cdn.pixabay.com/download/audio/2023/xxx.mp3?filename=example.mp3",
+    "style": "治愈",
+    "name": "示例曲名",
+    "note": "这是示例条目，请替换为真实直链。删除本条目后填入你自己的"
+  },
+  {
+    "url": "",
+    "style": "欢快",
+    "name": "你的曲名",
+    "note": "url 留空会被自动跳过；style 必须是 17 个风格之一（治愈/欢快/情感/古风/Vlog/氛围/美食/旅行/美妆/卡点/搞笑/动感/浪漫/励志/民谣/电子/说唱）"
+  }
+]

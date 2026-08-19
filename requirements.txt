@@ -1,0 +1,13 @@
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+lxml>=4.9.0
+Pillow>=10.0.0
+imageio-ffmpeg>=0.4.9
+edge-tts>=6.1.0
+opencv-python>=4.5.0
+# Web UI 后端（python web_ui.py 启动可视化控制台）
+Flask>=3.0.0
+# 动态水印去除 OCR 模式（可选，包较大约 200MB）
+# paddleocr>=2.6.0
+# LLM 大模型二创（可选，用于文案和封面标题生成）
+# openai>=1.0.0

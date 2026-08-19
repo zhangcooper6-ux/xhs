@@ -1,0 +1,1 @@
+$conn = Get-NetTCPConnection -LocalPort 5000 -State Listen -ErrorAction Sil

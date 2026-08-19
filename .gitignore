@@ -1,0 +1,39 @@
+# Python Virtual Environment
+venv/
+env/
+.venv/
+
+# Python Cache & Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Project Runtime / Temp Output & Frames
+output/
+temp/
+temp_frames/
+debug_frames/
+verify_frames/
+tmp_temp/
+pip_cache/
+
+# Model Files (Whisper / OCR downloads)
+models/
+
+# Sensitive Local Config & Custom Presets
+config/custom_presets.json
+
+# Test Artifacts & Media Samples
+test_voice.mp3
+
+# Logs & Debug Outputs
+*.log
+debug.log
+
+# System & IDE Files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

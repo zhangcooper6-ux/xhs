@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>小红书爆款笔记复刻 · Web UI</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ============ 顶部导航栏 ============ -->
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-logo">📕</span>
+    <div class="brand-text">
+      <h1>xhs_clone</h1>
+      <span class="brand-sub">小红书爆款笔记复刻 · 可视化控制台</span>
+    </div>
+  </div>
+
+  <div class="topbar-actions">
+    <!-- 预设方案下拉 -->
+    <div class="preset-wrap">
+      <label class="preset-label">预设方案</label>
+      <select id="presetSelect" class="preset-select" title="一键载入预设参数组合（含自定义模板）">
+        <option value="">— 选择预设 —</option>
+      </select>
+      <button id="savePresetBtn" class="icon-btn" title="保存当前参数为自定义模板" type="button">💾</button>
+      <button id="deletePresetBtn" class="icon-btn" title="删除选中的自定义模板" type="button">🗑️</button>
+    </div>
+
+    <!-- 主题切换 -->
+    <button id="themeToggle" class="icon-btn" title="切换深色/浅色主题" type="button">
+      <span class="theme-icon-light">🌙</span>
+      <span class="theme-icon-dark">☀️</span>
+    </button>
+
+    <!-- 帮助 -->
+    <button id="helpBtn" class="icon-btn" title="使用说明" type="button">❓</button>
+  </div>
+</header>
+
+<!-- ============ 主体布局 ============ -->
+<main class="layout">
+
+  <!-- ===== 左侧：参数面板 ===== -->
+  <section class="panel panel-left" id="paramPanel">
+    <!-- 搜索框 -->
+    <div class="search-wrap">
+      <input type="text" id="paramSearch" class="search-input"
+             placeholder="🔍 搜索参数（名称/说明/flag）…" autocomplete="off">
+      <button id="clearSearch" class="search-clear" title="清空" type="button" hidden>×</button>
+    </div>
+
+    <!-- 分组 Tab -->
+    <nav class="group-tabs" id="groupTabs" role="tablist"></nav>
+
+    <!-- 分组内容（同时渲染所有分组，按 Tab 切换显示） -->
+    <div class="group-panels" id="groupPanels"></div>
+
+    <!-- 底部运行按钮条 -->
+    <div class="run-bar">
+      <button id="runBtn" class="btn btn-primary" type="button">
+        <span class="btn-icon">▶</span> 运行
+      </button>
+      <button id="stopBtn" class="btn btn-danger" type="button" disabled>
+        <span class="btn-icon">■</span> 停止
+      </button>
+      <button id="resetBtn" class="btn btn-ghost" type="button" title="清空所有非必填参数">重置</button>
+      <span class="run-bar-hint" id="runBarHint">填写 URL 后点击运行</span>
+    </div>
+  </section>
+
+  <!-- ===== 右侧：预览 + 日志 + 产出 ===== -->
+  <section class="panel panel-right">
+
+    <!-- 命令预览 -->
+    <div class="card card-cmd">
+      <div class="card-head">
+        <h2>📋 命令预览</h2>
+        <div class="card-actions">
+          <button id="copyCmdBtn" class="mini-btn" type="button">复制 shell</button>
+          <button id="refreshCmdBtn" class="mini-btn" type="button" title="重新生成">↻</button>
+        </div>
+      </div>
+      <pre id="cmdPreview" class="cmd-preview" aria-live="polite"></pre>
+      <div id="cmdErrors" class="cmd-errors" hidden></div>
+    </div>
+
+    <!-- 进度条 -->
+    <div class="card card-progress" id="progressCard" hidden>
+      <div class="progress-head">
+        <span class="progress-stage" id="progressStage">准备中…</span>
+        <span class="progress-elapsed" id="progressElapsed">00:00</span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressFill" style="width:0%"></div>
+      </div>
+      <div class="progress-steps" id="progressSteps"></div>
+    </div>
+
+    <!-- 实时日志 -->
+    <div class="card card-log">
+      <div class="card-head">
+        <h2>📜 实时日志</h2>
+        <div class="card-actions">
+          <label class="log-autoscroll">
+            <input type="checkbox" id="autoscrollChk" checked> 自动滚动
+          </label>
+          <button id="clearLogBtn" class="mini-btn" type="button">清空</button>
+        </div>
+      </div>
+      <div id="logBox" class="log-box" aria-live="polite"></div>
+    </div>
+
+    <!-- 产出文件 -->
+    <div class="card card-outputs" id="outputsCard" hidden>
+      <div class="card-head">
+        <h2>📂 产出文件</h2>
+        <button id="refreshOutputsBtn" class="mini-btn" type="button">刷新</button>
+      </div>
+      <div id="outputsList" class="outputs-list"></div>
+    </div>
+
+  </section>
+</main>
+
+<!-- ============ 试听弹窗 ============ -->
+<div class="modal" id="voiceModal" hidden>
+  <div class="modal-mask" data-close></div>
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3>🎤 配音试听</h3>
+      <button class="modal-close" data-close type="button">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <label>音色</label>
+        <select id="auditionVoice" class="input"></select>
+      </div>
+      <div class="form-row form-row-3">
+        <div>
+          <label>语速</label>
+          <input id="auditionRate" class="input" value="+0%" placeholder="+10%">
+        </div>
+        <div>
+          <label>音调</label>
+          <input id="auditionPitch" class="input" value="+0Hz" placeholder="+5Hz">
+        </div>
+        <div>
+          <label>试听文本</label>
+          <input id="auditionText" class="input" value="你好，这是配音试听样例。小红书爆款笔记复刻工具。">
+        </div>
+      </div>
+      <div class="form-row">
+        <button id="auditionPlayBtn" class="btn btn-primary" type="button">▶ 生成并试听</button>
+        <span class="audition-hint" id="auditionHint"></span>
+      </div>
+      <audio id="auditionAudio" controls class="audition-audio" hidden></audio>
+      <div class="audition-note">⚠️ 仅 edge 服务商支持免费试听；火山引擎（bd_ 前缀）音色需 API Key，不支持免费试听</div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 滤镜/特效浏览弹窗 ============ -->
+<div class="modal" id="pickerModal" hidden>
+  <div class="modal-mask" data-close></div>
+  <div class="modal-box modal-box-wide">
+    <div class="modal-head">
+      <h3 id="pickerTitle">选择</h3>
+      <button class="modal-close" data-close type="button">×</button>
+    </div>
+    <div class="modal-body" id="pickerBody"></div>
+  </div>
+</div>
+
+<!-- ============ 帮助弹窗 ============ -->
+<div class="modal" id="helpModal" hidden>
+  <div class="modal-mask" data-close></div>
+  <div class="modal-box modal-box-wide">
+    <div class="modal-head">
+      <h3>❓ 使用说明</h3>
+      <button class="modal-close" data-close type="button">×</button>
+    </div>
+    <div class="modal-body help-body">
+      <h4>基本流程</h4>
+      <ol>
+        <li>在「输入源」分组填写小红书/抖音 URL 或本地文件路径</li>
+        <li>从顶部「预设方案」选一个最接近需求的模板</li>
+        <li>在各分组里微调参数（鼠标悬停可见详细说明）</li>
+        <li>右侧「命令预览」实时显示对应的 CLI 命令</li>
+        <li>点击底部「运行」启动，右侧日志区实时显示执行过程</li>
+        <li>完成后「产出文件」分组列出最新输出</li>
+      </ol>
+      <h4>智能提示</h4>
+      <ul>
+        <li>必填项未填会在命令预览下方红字提示</li>
+        <li>互斥参数同时开启会高亮警告（如 OCR 模式 / 颜色检测模式）</li>
+        <li>依赖参数未满足时，相关子参数会自动禁用（灰色）</li>
+        <li>API Key 输入框旁有 ⚠️ 安全提示：仅当前会话有效，建议优先用环境变量</li>
+      </ul>
+      <h4>键盘快捷键</h4>
+      <ul>
+        <li><kbd>Ctrl</kbd>+<kbd>Enter</kbd> 运行</li>
+        <li><kbd>Ctrl</kbd>+<kbd>.</kbd> 停止</li>
+        <li><kbd>/</kbd> 聚焦搜索框</li>
+      </ul>
+      <h4>启动方式</h4>
+      <pre class="help-code">python web_ui.py
+# 浏览器访问 http://localhost:5000</pre>
+    </div>
+  </div>
+</div>
+
+<!-- 全局 toast -->
+<div id="toast" class="toast" hidden></div>
+
+<script src="app.js?v=20260805"></script>
+</body>
+</html>
