@@ -565,18 +565,7 @@ def _download_file(sess, url, save_path):
                         f.write(chunk)
             return True
         except Exception as e:
-            logger.warning("下载尝试 %d/%d 异常 (%s)，尝试 SSL 降级请求...", attempt + 1, config.MAX_RETRIES, e)
-            try:
-                r = sess.get(url, stream=True, timeout=config.REQUEST_TIMEOUT, headers=headers, verify=False)
-                r.raise_for_status()
-                with open(save_path, "wb") as f:
-                    for chunk in r.iter_content(chunk_size=65536):
-                        if chunk:
-                            f.write(chunk)
-                logger.info("SSL 降级下载成功: %s", save_path)
-                return True
-            except Exception as e2:
-                logger.warning("SSL 降级下载尝试 %d/%d 仍失败: %s", attempt + 1, config.MAX_RETRIES, e2)
+            logger.warning("下载尝试 %d/%d 失败: %s", attempt + 1, config.MAX_RETRIES, e)
             time.sleep(1)
     return False
 
@@ -768,29 +757,20 @@ def parse_note(note_input):
             raise RuntimeError(f"视频下载失败: {video_url}")
     logger.info("下载完成: %s (%d bytes)", local_path, os.path.getsize(local_path))
 
-    # 下载原视频封面（优先网络下载；若网络拦截则自动从已下载视频文件截取抽帧作为封面兜底）
+    # 下载原视频封面（优先尝试 playwright；因抖音图片 CDN 反爬拦截 requests，不可用时秒级使用已下载视频抽帧）
     cover_local = os.path.join(dl_dir, "cover_original.jpg")
     cover_downloaded = False
 
     if cover_url:
-        logger.info("下载原视频封面到: %s", cover_local)
+        logger.info("尝试下载原视频封面到: %s", cover_local)
         if _download_with_playwright(cover_url, cover_local):
             logger.info("原封面下载完成(playwright): %s (%d bytes)",
                         cover_local, os.path.getsize(cover_local))
             cover_downloaded = True
-        else:
-            # playwright 失败 → 尝试 requests 兜底
-            logger.info("playwright 下载封面失败，尝试 requests 降级下载")
-            if _download_file(sess, cover_url, cover_local):
-                logger.info("原封面下载完成(requests): %s (%d bytes)",
-                            cover_local, os.path.getsize(cover_local))
-                cover_downloaded = True
-            else:
-                logger.warning("网络下载原封面失败: %s", cover_url)
 
-    # 如果网络下载失败（或没有 cover_url），直接从本地已下载的视频文件抽帧作为封面！
+    # 兜底保障：若 Playwright 未获取成功，直接使用本地已下载视频秒级抽帧生成封面（无延时，防告警）
     if not cover_downloaded or not os.path.exists(cover_local) or os.path.getsize(cover_local) == 0:
-        logger.info("使用本地已下载的视频文件抽帧生成封面: %s", local_path)
+        logger.info("使用已下载的本地视频抽帧生成封面: %s", local_path)
         if _extract_frame_fallback(local_path, cover_local, time_ratio=0.3):
             logger.info("视频抽帧生成封面成功: %s (%d bytes)",
                         cover_local, os.path.getsize(cover_local))
