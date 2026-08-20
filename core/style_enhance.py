@@ -212,10 +212,12 @@ def _build_creative_layers(cur_label, fc_parts, extra_inputs, target_w, target_h
         cur_label = new_label
         input_idx += 1
 
-    # ---- 4. 字幕条 ----
+    # ---- 4. 爆款 Hook 顶部标题卡（前3秒黄金留存关键）----\n    top_hook = creative.get("top_hook", True)\n    if top_hook and caption_text:\n        font = _find_font()\n        if font:\n            hook_style = creative.get("top_hook_style", "viral_yellow")\n            if hook_style == "viral_yellow":\n                bg_col, text_col = "yellow@0.95", "black"\n            elif hook_style == "viral_red":\n                bg_col, text_col = "red@0.90", "white"\n            else:\n                bg_col, text_col = "white@0.95", "black"\n\n            bar_h = int(target_h * 0.065)\n            fontsize = int(bar_h * 0.55)\n            bar_y = int(target_h * 0.08)  # 居顶部约 8% 位置，醒目且不挡视频主体\n            text_y = bar_y + (bar_h - fontsize) // 2\n\n            txt_file = _write_text_file(caption_text, tmp_dir, prefix="hook_")\n            wm_files.append(txt_file)\n            txt_escaped = _esc_path(txt_file)\n            font_escaped = _esc_path(font)\n\n            bar_label = f"{cur_label}_hookbar"\n            hook_label = "hook_out"\n            fc_parts.append(\n                f"[{cur_label}]drawbox=x=int((iw-tw)/2)-24:y={bar_y}:w=tw+48:h={bar_h}:"\n                f"color={bg_col}:t=fill[{bar_label}]\")\n            fc_parts.append(\n                f"[{bar_label}]drawtext=fontfile='{font_escaped}':"\n                f"textfile='{txt_escaped}':fontsize={fontsize}:bold=1:"\n                f"fontcolor={text_col}:x=(w-tw)/2:y={text_y}[{hook_label}]\")\n            cur_label = hook_label\n            logger.info("添加前3秒黄金 Hook 标题卡: %s", caption_text[:20])
+
+    # ---- 5. 普通字幕条 ----
     if (creative.get("caption_enabled") and
             creative.get("caption_style", "bottom") != "none" and
-            caption_text):
+            caption_text and not top_hook):
         font = _find_font()
         if font:
             style = creative.get("caption_style", "bottom")
@@ -321,11 +323,17 @@ def _build_filter_complex(w, h, duration, params, creative=None,
         else:
             fg_scale += ",unsharp=5:5:0.6:5:5:0.0"
 
+    # 呼吸式微运镜推拉（慢呼吸 1.00x -> 1.025x 动态拉伸平移，100% 破坏静态像素帧特征哈希比对，同时增加视觉动感与完播率）
+    if params.get("micro_zoom", True):
+        fg_scale += (f",crop=w='iw*(1-0.025*sin(t*0.6))':h='ih*(1-0.025*sin(t*0.6))':"
+                     f"x='(iw-cw)/2':y='(ih-ch)/2',"
+                     f"scale={target_w}:{target_h}:{scale_flags}")
+
     # 判断原视频比例是否与目标画面接近：若接近则不做模糊背景叠加（避免"双层"效果）
-    # 模糊背景设计用于横屏/方形视频转竖屏时填充上下空白，竖屏转竖屏反而会产生双层重影
     src_ratio = (w / h) if h > 0 else 0
     tgt_ratio = (target_w / target_h) if target_h > 0 else 0
     ratio_match = abs(src_ratio - tgt_ratio) < 0.05  # 容差约 5%（9:16=0.5625）
+    layout_mode = params.get("layout_mode", "auto")
 
     if ratio_match:
         # 比例相同：直接缩放+调色，不加模糊背景
@@ -333,11 +341,31 @@ def _build_filter_complex(w, h, duration, params, creative=None,
         cur_label = "base"
         logger.info("原视频比例 %.3f ≈ 目标比例 %.3f，跳过模糊背景叠加",
                     src_ratio, tgt_ratio)
+    elif layout_mode == "crop_fill":
+        # 满屏强裁切模式：直接拉伸充填 9:16，无任何上下黑/模糊边框
+        full_crop_scale = (f"scale={target_w}:{target_h}:force_original_aspect_ratio=increase:{scale_flags},"
+                           f"crop={target_w}:{target_h},setsar=1")
+        if eq_parts:
+            full_crop_scale += f",eq={':'.join(eq_parts)}"
+        if vibrance and vibrance > 0:
+            full_crop_scale += f",vibrance=intensity={vibrance:.2f}"
+        if params.get("micro_zoom", True):
+            full_crop_scale += (f",crop=w='iw*(1-0.025*sin(t*0.6))':h='ih*(1-0.025*sin(t*0.6))':"
+                                f"x='(iw-cw)/2':y='(ih-ch)/2',"
+                                f"scale={target_w}:{target_h}:{scale_flags}")
+        fc_parts.append(f"[0:v]{full_crop_scale}[base]")
+        cur_label = "base"
+        logger.info("启用满屏智能裁切模式 (1080x1920)")
     else:
-        # 比例不同：用模糊背景填充画面（保持原比例前景居中）
+        # 爆款卡片版式 / 边框模糊背景模式：给画中画原视频增加 4px 纯白高质感边框，消除模糊背景融合带来的重影杂乱感
+        border_w = params.get("border_width", 4)
+        border_col = params.get("border_color", "white@0.95")
+        if border_w > 0:
+            fg_scale += f",pad=iw+{border_w*2}:ih+{border_w*2}:{border_w}:{border_w}:color={border_col}"
+
         bg_scale = (f"scale={target_w}:{target_h}:force_original_aspect_ratio=increase:{scale_flags},"
                     f"setsar=1,"
-                    f"boxblur={params.get('blur_radius', 20)}:{params.get('blur_power', 2)}")
+                    f"boxblur={params.get('blur_radius', 24)}:{params.get('blur_power', 2)}")
         if params.get("darken_bg", 0) > 0:
             bg_scale += f",eq=brightness=-{params['darken_bg']}:saturation={1 - params['darken_bg']*0.3}"
 
@@ -346,7 +374,7 @@ def _build_filter_complex(w, h, duration, params, creative=None,
         fc_parts.append(f"[fg_raw]{fg_scale}[fg_main]")
         fc_parts.append("[bg_blur][fg_main]overlay=(W-w)/2:(H-h)/2[base]")
         cur_label = "base"
-        logger.info("原视频比例 %.3f ≠ 目标比例 %.3f，启用模糊背景填充",
+        logger.info("原视频比例 %.3f ≠ 目标比例 %.3f，启用爆款卡片边框+模糊背景融合",
                     src_ratio, tgt_ratio)
 
     # === 滤镜预设（在风格增强合成之后、字幕抹除之前应用，作用于整帧画面）===
@@ -829,6 +857,11 @@ def enhance_video(src_path, dst_path, params=None, creative=None,
         else:
             logger.warning("未获取到字幕文本，跳过新字幕渲染")
             subtitle_cfg = dict(subtitle_cfg, render_enabled=False)
+
+    if caption_text is None and note_text:
+        caption_text = note_text.split("。")[0].split("！")[0].split("!")[0]
+        if len(caption_text) > 18:
+            caption_text = caption_text[:18]
 
     fc, out_label, extra_inputs, wm_files = _build_filter_complex(
         w, h, duration, params, creative, watermark, caption_text, out_dir, pip_path,

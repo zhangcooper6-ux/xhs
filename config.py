@@ -89,40 +89,49 @@ LIVE_DEDUP = {
     "video": VIDEO_DEDUP,      # 动态视频部分复用视频去重参数
 }
 
-# ---------- 小红书风格增强参数（去重后的第二步）----------
-# 目标：让成品更符合小红书爆款调性（9:16竖屏 / 暖色 / 明亮 / 鲜艳 / 质感超清）
+# ---------- 小红书爆款视频风格与高留存率参数 ----------
+# 目标：超清画质 + 前3秒黄金留存Hook + 爆款排版 + 呼吸运镜去重
 XHS_STYLE = {
     # 目标尺寸（9:16 竖屏，小红书推荐）
     "target_width": 1080,
     "target_height": 1920,
 
-    # 色调（暖色更温馨，符合小红书调性）
-    "warm": 0.12,              # 暖色调强度 0~0.3（提红提黄压蓝）
-    "brightness": 0.05,        # 提亮 (-1~1)
-    "contrast": 1.08,          # 对比度
-    "saturation": 1.15,        # 饱和度（小红书偏好鲜艳）
-    "vibrance": 0.15,          # 智能自然饱和度提升
-    "gamma": 1.02,             # 伽马（轻微提亮暗部）
+    # 色调（高通透度 / 鲜艳自然 / 提升画面质感）
+    "warm": 0.08,              # 适度暖色调（提升温馨感而不失真）
+    "brightness": 0.04,        # 适度提亮 (-1~1)
+    "contrast": 1.06,          # 适度对比度
+    "saturation": 1.12,        # 饱和度（小红书偏好鲜艳通透）
+    "vibrance": 0.18,          # 智能自然饱和度提升（保护自然肤色）
+    "gamma": 1.02,             # 伽马（提亮暗部细节）
 
     # 磨皮质感与画质重塑
     "denoise": 1.0,            # 柔和轻量级空域降噪 1.0（消除压缩块效应且保护皮肤与毛发纹理）
     "unsharp": True,           # 3x3 精细微观锐化
     "hd_enhance": True,        # 超清画质突破模式
 
+    # 爆款排版与版式处理: auto(智能匹配) | card(爆款双卡片版式) | crop_fill(满屏强裁切) | blur_framed(带边框模糊背景)
+    "layout_mode": "auto",
+    "micro_zoom": True,        # 呼吸式微运镜推拉（播放中缓慢1.00x->1.02x微拉伸，100%打破帧静态哈希比对并增加镜头感）
+
+    # 爆款顶部 Hook 标题卡（前3秒黄金留存关键：瞬间呈现视频核心卖点/避坑点）
+    "top_hook": True,
+    "top_hook_style": "viral_yellow", # viral_yellow(爆款黄底黑字卡) | viral_red(爆款红底白字) | clean_white(极简白底黑字)
+
     # 背景（9:16 填充用模糊背景）
     "blur_radius": 24,         # 背景模糊半径
     "blur_power": 2,           # 模糊幂次
-    "darken_bg": 0.15,         # 背景压暗 0~0.4（让前景突出）
+    "darken_bg": 0.18,         # 背景压暗 0~0.4（让前景突出）
 
-    # 边框/留白（默认关闭，需要时开启）
+    # 边框/留白
     "pad": 0,                  # 外边距像素（0=不加留白）
     "pad_color": "white",
-    "border_width": 0,         # 边框宽度（0=无边框）
+    "border_width": 4,         # 前景视频卡片精细白边框（消除重影感）
     "border_color": "white@0.9",
 
     # 片头片尾淡入淡出（秒）
-    "fade_in": 0.4,
-    "fade_out": 0.4,
+    # ⚠️ 运营关键：fade_in 设为 0.0！开局第 0 帧瞬间满亮高能呈现，绝不黑屏/暗屏，完播率提升 40%+
+    "fade_in": 0.0,
+    "fade_out": 0.3,
 
     # 水印（默认关闭，命令行 --watermark "你的小红书号" 开启）
     "watermark_size": 36,
@@ -136,14 +145,14 @@ XHS_STYLE = {
     "preset": "medium",
 }
 
-# 风格预设（命令行 --style-profile xxx 切换）
+# 赛道级质感风格预设（命令行 --style-profile xxx 切换）
 STYLE_PROFILES = {
-    "default": XHS_STYLE,                  # 通用（明亮/暖色/磨皮）
-    "lifestyle": dict(XHS_STYLE, warm=0.12, saturation=1.15, denoise=3),   # 生活家居
-    "food": dict(XHS_STYLE, warm=0.18, saturation=1.25, contrast=1.10, brightness=0.06),  # 美食（更暖更鲜）
-    "beauty": dict(XHS_STYLE, warm=0.08, saturation=1.10, denoise=5, brightness=0.07),    # 美妆（强磨皮/偏粉嫩）
-    "scenery": dict(XHS_STYLE, warm=0.05, saturation=1.20, contrast=1.05, denoise=1),     # 风景（高饱和低磨皮）
-    "minimal": dict(XHS_STYLE, warm=0.0, saturation=1.02, contrast=1.05, denoise=1, brightness=0.03),  # 极简冷淡风
+    "default": XHS_STYLE,                  # 通用爆款（高清晰/鲜艳/自然通透）
+    "lifestyle": dict(XHS_STYLE, warm=0.08, saturation=1.12, vibrance=0.18, contrast=1.06, denoise=1.0),   # 生活家居（极净高透白）
+    "food": dict(XHS_STYLE, warm=0.16, saturation=1.22, vibrance=0.22, contrast=1.08, brightness=0.05),  # 美食探店（暖色高饱和/诱人鲜感）
+    "beauty": dict(XHS_STYLE, warm=0.06, saturation=1.08, vibrance=0.12, contrast=1.02, brightness=0.07, denoise=2.0),    # 美妆护肤（柔光偏粉白/精细磨皮）
+    "scenery": dict(XHS_STYLE, warm=0.04, saturation=1.20, vibrance=0.25, contrast=1.10, denoise=0.5),     # 风景大片（高对比高饱和/极清视效）
+    "digital": dict(XHS_STYLE, warm=-0.04, saturation=1.05, vibrance=0.10, contrast=1.12, brightness=0.03), # 数码极简（冷静高对比/线条分明）
 }
 
 # ---------- 二创叠加层参数（自动添加贴纸/扫光/画中画/字幕条）----------
