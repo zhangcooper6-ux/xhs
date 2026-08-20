@@ -323,10 +323,10 @@ def _build_filter_complex(w, h, duration, params, creative=None,
         else:
             fg_scale += ",unsharp=5:5:0.6:5:5:0.0"
 
-    # 呼吸式微运镜推拉（慢呼吸 1.00x -> 1.025x 动态拉伸平移，100% 破坏静态像素帧特征哈希比对，同时增加视觉动感与完播率）
+    # 呼吸式微运镜动态平移（微剪裁 + 动态正弦微平移，100% 破坏静态像素帧特征哈希比对，增加画面镜头动感）
     if params.get("micro_zoom", True):
-        fg_scale += (f",crop=w='iw*(1-0.025*sin(t*0.6))':h='ih*(1-0.025*sin(t*0.6))':"
-                     f"x='(iw-cw)/2':y='(ih-ch)/2',"
+        fg_scale += (f",crop=w='trunc(iw*0.97/2)*2':h='trunc(ih*0.97/2)*2':"
+                     f"x='(in_w-out_w)/2+4*sin(t*1.2)':y='(in_h-out_h)/2+4*cos(t*0.9)',"
                      f"scale={target_w}:{target_h}:{scale_flags}")
 
     # 判断原视频比例是否与目标画面接近：若接近则不做模糊背景叠加（避免"双层"效果）
@@ -350,8 +350,8 @@ def _build_filter_complex(w, h, duration, params, creative=None,
         if vibrance and vibrance > 0:
             full_crop_scale += f",vibrance=intensity={vibrance:.2f}"
         if params.get("micro_zoom", True):
-            full_crop_scale += (f",crop=w='iw*(1-0.025*sin(t*0.6))':h='ih*(1-0.025*sin(t*0.6))':"
-                                f"x='(iw-cw)/2':y='(ih-ch)/2',"
+            full_crop_scale += (f",crop=w='trunc(iw*0.97/2)*2':h='trunc(ih*0.97/2)*2':"
+                                f"x='(in_w-out_w)/2+4*sin(t*1.2)':y='(in_h-out_h)/2+4*cos(t*0.9)',"
                                 f"scale={target_w}:{target_h}:{scale_flags}")
         fc_parts.append(f"[0:v]{full_crop_scale}[base]")
         cur_label = "base"

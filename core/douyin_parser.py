@@ -250,19 +250,62 @@ def _extract_meta_from_item(item):
 # 不再 SSR videoInfoRes，因此也拿不到视频数据。
 # playwright 是当前最稳定的免登录解析方案。
 
+_PLAYWRIGHT_DISABLED = False
+
+
+def _fetch_with_ttwid_api(video_id):
+    """使用 ByteDance 官方访客 ttwid 凭证 + 网页 Web 详情 API 提取视频数据。
+
+    这是 2026 年最快、最稳定的免登录纯 HTTP 解析方案。
+    """
+    try:
+        sess = requests.Session()
+        sess.trust_env = False
+        headers = {
+            "User-Agent": DESKTOP_UA,
+            "Referer": "https://www.douyin.com/",
+            "Accept": "application/json, text/plain, */*"
+        }
+        # 1. 注册获取 ttwid 访客 Cookie
+        tt_res = sess.post(
+            "https://ttwid.bytedance.com/ttwid/union/register/",
+            json={"region": "cn", "aid": 1768, "needFp": True, "fp": "verify_123456789", "service": "www.douyin.com"},
+            headers=headers,
+            timeout=5
+        )
+        ttwid_val = sess.cookies.get("ttwid") or (tt_res.cookies.get("ttwid") if hasattr(tt_res, "cookies") else None)
+        if ttwid_val:
+            headers["Cookie"] = f"ttwid={ttwid_val}; msToken=1234567890abcdef;"
+
+        # 2. 请求网页 aweme detail 接口
+        detail_url = (
+            f"https://www.douyin.com/aweme/v1/web/aweme/detail/?"
+            f"aweme_id={video_id}&device_platform=webapp&aid=6383&channel=channel_pc_web"
+        )
+        r = sess.get(detail_url, headers=headers, timeout=10)
+        if r.status_code == 200 and r.text:
+            data = r.json()
+            aweme = data.get("aweme_detail")
+            if aweme:
+                logger.info("策略0 (ttwid Web API): 提取成功")
+                return aweme
+    except Exception as e:
+        logger.warning("ttwid Web API 策略失败: %s", e)
+    return None
+
+
 def _fetch_with_playwright(video_id, timeout_ms=45000, max_retries=2):
     """用 playwright 无头浏览器访问 www.douyin.com/video/{id}，
     自动执行 byted_acrawler JS 校验，返回真实页面 HTML。
 
     需要先安装: pip install playwright && playwright install chromium
     返回: HTML 字符串；playwright 不可用或超时返回 None
-
-    优化点：
-      - 用 domcontentloaded 代替 networkidle（抖音页面有大量长连接/轮询，
-        networkidle 几乎永远不会触发，导致超时）
-      - goto 后手动等待 _ROUTER_DATA 文本出现（JS 校验 + reload 完成）
-      - 失败自动重试 max_retries 次
     """
+    global _PLAYWRIGHT_DISABLED
+    if _PLAYWRIGHT_DISABLED:
+        logger.debug("Playwright 环境已被禁用，跳过策略")
+        return None
+
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
@@ -289,14 +332,12 @@ def _fetch_with_playwright(video_id, timeout_ms=45000, max_retries=2):
                     browser.close()
                     continue
                 # 等待 _ROUTER_DATA 出现（JS 校验 + reload 后会写入）
-                # 抖音 byted_acrawler 校验流程：加载混淆 JS → 生成签名 cookie → reload → SSR
                 try:
                     page.wait_for_function(
                         "document.documentElement.innerHTML.includes('_ROUTER_DATA')",
                         timeout=30000,
                     )
                 except Exception:
-                    # _ROUTER_DATA 没出现，可能还在校验中，额外等待后重试
                     logger.debug("等待 _ROUTER_DATA 超时，额外等待 5s")
                     page.wait_for_timeout(5000)
                 html = page.content()
@@ -305,6 +346,10 @@ def _fetch_with_playwright(video_id, timeout_ms=45000, max_retries=2):
                     logger.info("playwright 页面大小: %d bytes (含 _ROUTER_DATA)", len(html))
                     return html
                 logger.warning("playwright 页面无 _ROUTER_DATA (size=%d)", len(html))
+        except (PermissionError, OSError) as e:
+            logger.warning("Playwright 系统权限拒绝 (%s)，禁用 Playwright 策略: %s", type(e).__name__, e)
+            _PLAYWRIGHT_DISABLED = True
+            break
         except Exception as e:
             logger.warning("playwright 策略失败 (attempt %d): %s", attempt, e)
             try:
@@ -315,23 +360,9 @@ def _fetch_with_playwright(video_id, timeout_ms=45000, max_retries=2):
 
 
 def _fetch_and_download_with_playwright(video_id, downloads=None, timeout_ms=60000):
-    """playwright 统一会话：访问视频页 + 下载视频/封面。
-
-    一次 playwright 启动完成两件事：
-      1. 访问 www.douyin.com/video/{id}，执行 byted_acrawler JS 校验拿真实 HTML
-      2. 在同一浏览器 context 内（带签名 cookie + 正确 TLS 指纹）下载视频/封面
-         抖音 CDN（douyinpic.com/snssdk.com）会拦截 requests 的 TLS 指纹，
-         用 context.request.get 下载可绕过。
-
-    参数:
-        video_id: 抖音视频 ID
-        downloads: 要下载的文件列表 [(url, save_path), ...]；None=不下载
-        timeout_ms: 页面加载超时
-    返回:
-        (html, download_results)
-        html: 页面 HTML（None=失败）
-        download_results: {save_path: True/False} 各文件下载结果
-    """
+    global _PLAYWRIGHT_DISABLED
+    if _PLAYWRIGHT_DISABLED:
+        return None, {}
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
@@ -384,6 +415,9 @@ def _fetch_and_download_with_playwright(video_id, downloads=None, timeout_ms=600
                         logger.warning("playwright 下载异常 %s: %s", dl_path, e)
 
             browser.close()
+    except (PermissionError, OSError) as e:
+        logger.warning("Playwright 系统权限拒绝 (%s)，禁用 Playwright 策略: %s", type(e).__name__, e)
+        _PLAYWRIGHT_DISABLED = True
     except Exception as e:
         logger.warning("playwright 统一会话失败: %s", e)
     return html, download_results
@@ -397,6 +431,9 @@ def _download_with_playwright(url, save_path, timeout_ms=30000):
 
     返回: 成功 True / 失败 False
     """
+    global _PLAYWRIGHT_DISABLED
+    if _PLAYWRIGHT_DISABLED:
+        return False
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
@@ -428,6 +465,10 @@ def _download_with_playwright(url, save_path, timeout_ms=30000):
             browser.close()
             logger.warning("playwright 下载失败: status=%s", r.status)
             return False
+    except (PermissionError, OSError) as e:
+        logger.warning("Playwright 系统权限拒绝 (%s)，禁用 Playwright 策略: %s", type(e).__name__, e)
+        _PLAYWRIGHT_DISABLED = True
+        return False
     except Exception as e:
         logger.warning("playwright 下载异常: %s", e)
         return False
@@ -607,31 +648,49 @@ def parse_note(note_input):
     cover_url = None  # 原视频封面 URL
     html = ""
 
-    # === 策略0: playwright 无头浏览器（最稳定，2026 年推荐）===
-    # 绕过 www.douyin.com 的 byted_acrawler JS 校验，拿到带 videoInfoRes 的真实页面
+    # === 策略0: ByteDance 官方访客 ttwid + Web API（0.3 秒超高速纯 HTTP 免登录解析）===
     try:
-        logger.info("策略0: playwright 无头浏览器")
-        pw_html = _fetch_with_playwright(video_id)
-        if pw_html:
-            html = pw_html
-            router_data = _extract_render_data(html)
-            if router_data:
-                item = _extract_item_from_router_data(router_data)
-                if item:
-                    logger.info("playwright 提取到视频 item")
-                    title, desc, tags, _ = _extract_meta_from_item(item)
-                    video_url = _pick_video_url_no_wm(item)
-                    cover_url = _pick_cover_url_from_item(item)
-                    if video_url:
-                        logger.info("提取到无水印视频 URL（playwm→play 去水印）")
-                    if cover_url:
-                        logger.info("提取到原视频封面 URL")
-                else:
-                    logger.warning("playwright _ROUTER_DATA 中未找到 item")
-            else:
-                logger.warning("playwright 页面未包含 _ROUTER_DATA")
+        logger.info("策略0: ttwid 官方访客 Web API 解析")
+        aweme = _fetch_with_ttwid_api(video_id)
+        if aweme:
+            desc = (aweme.get("desc") or "").strip()
+            title = desc.split("\n")[0][:40] if desc else ""
+            text_extra = aweme.get("text_extra") or aweme.get("textExtra") or []
+            tags = [te.get("hashtag_name") or te.get("hashtagName") for te in text_extra if isinstance(te, dict) and (te.get("hashtag_name") or te.get("hashtagName"))]
+            video_url = _pick_video_url(aweme)
+            cover_url = _pick_cover_url_from_item(aweme)
+            if video_url:
+                logger.info("ttwid Web API 成功提取视频 URL")
+            if cover_url:
+                logger.info("ttwid Web API 成功提取封面 URL")
     except Exception as e:
         logger.warning("策略0失败: %s", e)
+
+    # === 策略1: playwright 无头浏览器（备用）===
+    if not video_url:
+        try:
+            logger.info("策略1: playwright 无头浏览器")
+            pw_html = _fetch_with_playwright(video_id)
+            if pw_html:
+                html = pw_html
+                router_data = _extract_render_data(html)
+                if router_data:
+                    item = _extract_item_from_router_data(router_data)
+                    if item:
+                        logger.info("playwright 提取到视频 item")
+                        title, desc, tags, _ = _extract_meta_from_item(item)
+                        video_url = _pick_video_url_no_wm(item)
+                        cover_url = _pick_cover_url_from_item(item)
+                        if video_url:
+                            logger.info("提取到无水印视频 URL（playwm→play 去水印）")
+                        if cover_url:
+                            logger.info("提取到原视频封面 URL")
+                    else:
+                        logger.warning("playwright _ROUTER_DATA 中未找到 item")
+                else:
+                    logger.warning("playwright 页面未包含 _ROUTER_DATA")
+        except Exception as e:
+            logger.warning("策略1失败: %s", e)
 
     # === 策略1: m.douyin.com 移动端分享页（requests 回退）===
     if not video_url:
@@ -753,7 +812,7 @@ def parse_note(note_input):
     if not _download_file(sess, video_url, local_path):
         # requests 失败（抖音 CDN TLS 指纹拦截）→ 回退 playwright 下载
         logger.info("requests 下载失败，尝试 playwright 下载视频")
-        if not _download_with_playwright(video_url, local_path):
+        if _PLAYWRIGHT_DISABLED or not _download_with_playwright(video_url, local_path):
             raise RuntimeError(f"视频下载失败: {video_url}")
     logger.info("下载完成: %s (%d bytes)", local_path, os.path.getsize(local_path))
 
@@ -763,7 +822,11 @@ def parse_note(note_input):
 
     if cover_url:
         logger.info("尝试下载原视频封面到: %s", cover_local)
-        if _download_with_playwright(cover_url, cover_local):
+        if _download_file(sess, cover_url, cover_local):
+            logger.info("原封面下载完成(HTTP): %s (%d bytes)",
+                        cover_local, os.path.getsize(cover_local))
+            cover_downloaded = True
+        elif not _PLAYWRIGHT_DISABLED and _download_with_playwright(cover_url, cover_local):
             logger.info("原封面下载完成(playwright): %s (%d bytes)",
                         cover_local, os.path.getsize(cover_local))
             cover_downloaded = True
