@@ -30,12 +30,13 @@ const STORAGE_KEYS = {
   PROVIDER_CONFIGS: "xhs_llm_provider_configs", // 按服务商分别存的 key/token（切换服务商自动带出）
 };
 
-// 需要持久化的 LLM 参数 key（敏感信息只存本地浏览器）
+// 需要持久化的 LLM 参数 key（服务端 config/llm_config.json + 本地浏览器全量持久化）
 const LLM_PERSIST_KEYS = [
   "llm", "llm_only", "llm_provider", "llm_model", "llm_api_key",
   "grsai_image_model",
   "prompt_llm_provider", "prompt_llm_model", "prompt_llm_api_key",
   "image_llm_provider", "image_llm_model", "image_llm_api_key",
+  "image_llm_fallback_provider", "image_llm_fallback_model", "image_llm_fallback_api_key",
   "ai_cover", "ai_cover_styles", "ai_cover_size", "image_mode",
   "tts_provider",
   "volcengine_app_id", "volcengine_access_key",
@@ -47,6 +48,7 @@ const PROVIDER_FIELDS = {
   llm_provider:        { scope: "main",   modelKey: "llm_model",        apiKeyKey: "llm_api_key" },
   prompt_llm_provider: { scope: "prompt", modelKey: "prompt_llm_model", apiKeyKey: "prompt_llm_api_key" },
   image_llm_provider:  { scope: "image",  modelKey: "image_llm_model",  apiKeyKey: "image_llm_api_key" },
+  image_llm_fallback_provider: { scope: "image_fallback", modelKey: "image_llm_fallback_model", apiKeyKey: "image_llm_fallback_api_key" },
   tts_provider:        { scope: "tts",    modelKey: null,               apiKeyKey: null,
                          extra: { volcengine_app_id: "app_id", volcengine_access_key: "access_key" } },
 };
@@ -282,6 +284,7 @@ async function loadParams() {
     const data = await apiGet("/api/params");
     State.paramGroups = data.groups || [];
     State.presets = data.presets || [];
+    State.backendLlmConfig = data.llm_config || null;
     // 自定义模板优先用后端返回的，后端没有则回退到 localStorage（兼容旧数据）
     const backendCustom = data.custom_presets || [];
     if (backendCustom.length > 0) {
@@ -385,6 +388,29 @@ function renderGroups() {
     panel.className = "group-panel" + (idx === 0 ? " active" : "");
     panel.dataset.group = g.key;
     panel.innerHTML = `<div class="group-desc">${escapeHtml(g.desc)}</div>`;
+
+    if (g.key === "llm") {
+      const bar = document.createElement("div");
+      bar.className = "llm-action-bar";
+      bar.innerHTML = `
+        <div class="llm-action-info">
+          <span class="llm-action-icon">🔒</span>
+          <span>LLM 配置与 API Keys 已支持加密持久化保存（服务端 + 本地文件）</span>
+        </div>
+        <div class="llm-action-btns">
+          <button type="button" class="btn-save-llm" id="btnSaveLlm">💾 保存 LLM 配置</button>
+          <button type="button" class="btn-clear-llm" id="btnClearLlm">🗑️ 清除/重置</button>
+        </div>
+      `;
+      panel.appendChild(bar);
+      setTimeout(() => {
+        const saveBtn = panel.querySelector("#btnSaveLlm");
+        const clearBtn = panel.querySelector("#btnClearLlm");
+        if (saveBtn) saveBtn.addEventListener("click", manualSaveLlmConfig);
+        if (clearBtn) clearBtn.addEventListener("click", manualClearLlmConfig);
+      }, 0);
+    }
+
     g.params.forEach(p => panel.appendChild(renderParam(p)));
     el.groupPanels.appendChild(panel);
   });
@@ -427,7 +453,7 @@ function renderParam(p) {
     help.className = "param-help";
     let helpText = p.help;
     if (p.type === "password") {
-      helpText = '<span class="security-warn">⚠️ 安全提示：API Key 不持久化，仅当前会话有效。建议优先用环境变量</span><br>' + helpText;
+      helpText = '<span class="security-warn">🔒 持久化安全保护：填写的 API Key/Token 已支持持久化保存（服务端 + 本地文件），下次启动自动恢复</span><br>' + helpText;
     }
     help.innerHTML = helpText;
     wrap.appendChild(help);
@@ -971,15 +997,66 @@ async function onDeleteCustomPreset() {
   toast(`已删除模板：${preset.name}`, "ok");
 }
 
-// ===== LLM 配置持久化（localStorage） =====
+// ===== LLM 配置持久化（服务端文件 config/llm_config.json + localStorage 双重保证） =====
+let _llmSyncTimer = null;
+function syncLlmConfigToBackend(cfg, providerConfigs) {
+  if (_llmSyncTimer) clearTimeout(_llmSyncTimer);
+  _llmSyncTimer = setTimeout(() => {
+    const payload = {
+      llm_config: cfg || collectLlmConfigValues(),
+      provider_configs: providerConfigs || loadProviderConfigs(),
+    };
+    apiPost("/api/llm-config", payload).catch(e => {
+      console.warn("同步 LLM 配置到后端失败:", e);
+    });
+  }, 300);
+}
+
+function collectLlmConfigValues() {
+  const cfg = {};
+  LLM_PERSIST_KEYS.forEach(k => {
+    cfg[k] = State.values[k];
+  });
+  return cfg;
+}
+
 function loadLlmConfig() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.LLM_CONFIG);
-    if (!raw) return;
-    const cfg = JSON.parse(raw);
-    LLM_PERSIST_KEYS.forEach(k => {
-      if (cfg[k] !== undefined) State.values[k] = cfg[k];
-    });
+    let cfg = null;
+    let providerConfigs = null;
+
+    // 优先从后端 API 返回的数据还原
+    if (State.backendLlmConfig) {
+      if (State.backendLlmConfig.llm_config && Object.keys(State.backendLlmConfig.llm_config).length > 0) {
+        cfg = State.backendLlmConfig.llm_config;
+      }
+      if (State.backendLlmConfig.provider_configs && Object.keys(State.backendLlmConfig.provider_configs).length > 0) {
+        providerConfigs = State.backendLlmConfig.provider_configs;
+      }
+    }
+
+    // 兜底从 localStorage 读取
+    if (!cfg) {
+      const raw = localStorage.getItem(STORAGE_KEYS.LLM_CONFIG);
+      if (raw) cfg = JSON.parse(raw);
+    }
+    if (!providerConfigs) {
+      const rawP = localStorage.getItem(STORAGE_KEYS.PROVIDER_CONFIGS);
+      if (rawP) providerConfigs = JSON.parse(rawP);
+    }
+
+    if (cfg) {
+      LLM_PERSIST_KEYS.forEach(k => {
+        if (cfg[k] !== undefined && cfg[k] !== null) {
+          State.values[k] = cfg[k];
+        }
+      });
+      try { localStorage.setItem(STORAGE_KEYS.LLM_CONFIG, JSON.stringify(cfg)); } catch (_) {}
+    }
+
+    if (providerConfigs) {
+      try { localStorage.setItem(STORAGE_KEYS.PROVIDER_CONFIGS, JSON.stringify(providerConfigs)); } catch (_) {}
+    }
   } catch (e) {
     console.warn("loadLlmConfig", e);
   }
@@ -987,14 +1064,51 @@ function loadLlmConfig() {
 
 function saveLlmConfig() {
   try {
-    const cfg = {};
-    LLM_PERSIST_KEYS.forEach(k => {
-      cfg[k] = State.values[k];
-    });
+    const cfg = collectLlmConfigValues();
     localStorage.setItem(STORAGE_KEYS.LLM_CONFIG, JSON.stringify(cfg));
+    syncLlmConfigToBackend(cfg, loadProviderConfigs());
   } catch (e) {
     console.warn("saveLlmConfig", e);
   }
+}
+
+async function manualSaveLlmConfig() {
+  try {
+    const cfg = collectLlmConfigValues();
+    const providerConfigs = loadProviderConfigs();
+    localStorage.setItem(STORAGE_KEYS.LLM_CONFIG, JSON.stringify(cfg));
+    await apiPost("/api/llm-config", { llm_config: cfg, provider_configs: providerConfigs });
+    toast("✅ LLM 配置与 API Keys 已成功保存（服务端 + 本地文件，下次启动自动恢复）", "ok");
+  } catch (e) {
+    toast("保存 LLM 配置失败：" + e.message, "err");
+  }
+}
+
+async function manualClearLlmConfig() {
+  if (!confirm("确认重置并清除已保存的 LLM 配置与 API Keys 吗？")) return;
+  try {
+    localStorage.removeItem(STORAGE_KEYS.LLM_CONFIG);
+    localStorage.removeItem(STORAGE_KEYS.PROVIDER_CONFIGS);
+    await apiPost("/api/llm-config/delete", {});
+  } catch (e) {
+    console.warn("清除服务端 LLM 配置失败:", e);
+  }
+
+  LLM_PERSIST_KEYS.forEach(k => {
+    let dv = "";
+    State.paramGroups.forEach(g => {
+      g.params.forEach(p => {
+        if (p.key === k) {
+          dv = (p.default !== null && p.default !== undefined ? p.default : "");
+        }
+      });
+    });
+    State.values[k] = dv;
+  });
+  rerenderValues();
+  updateParamDisabled();
+  refreshCmdPreview();
+  toast("已重置并清除 LLM 配置与 API Keys", "ok");
 }
 
 // ===== 按服务商持久化 key/token（切换服务商自动带出） =====
@@ -1008,6 +1122,7 @@ function loadProviderConfigs() {
 function saveProviderConfigs(all) {
   try {
     localStorage.setItem(STORAGE_KEYS.PROVIDER_CONFIGS, JSON.stringify(all || {}));
+    syncLlmConfigToBackend(null, all);
   } catch (e) { console.warn("saveProviderConfigs", e); }
 }
 

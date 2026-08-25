@@ -26,6 +26,8 @@ WEB_DIR = os.path.join(BASE_DIR, "web")
 XHS_CLONE = os.path.join(BASE_DIR, "xhs_clone.py")
 # 自定义模板持久化文件（与浏览器 localStorage 解耦，换浏览器/清缓存不丢失）
 CUSTOM_PRESETS_FILE = os.path.join(BASE_DIR, "config", "custom_presets.json")
+# LLM 配置持久化文件（跨终端/跨浏览器/重启后自动还原）
+LLM_CONFIG_FILE = os.path.join(BASE_DIR, "config", "llm_config.json")
 
 app = Flask(__name__, static_folder=None)
 
@@ -854,12 +856,64 @@ def static_files(filename):
 @app.route("/api/params")
 def api_params():
     resp = jsonify({"groups": PARAM_GROUPS, "presets": PRESETS,
-                    "custom_presets": _load_custom_presets()})
+                    "custom_presets": _load_custom_presets(),
+                    "llm_config": _load_llm_config()})
     # 禁止浏览器缓存参数定义，确保后端改动后前端立即可见
     resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     resp.headers["Pragma"] = "no-cache"
     resp.headers["Expires"] = "0"
     return resp
+
+
+# ========== LLM 配置服务端持久化（文件存储 config/llm_config.json） ==========
+def _load_llm_config():
+    """从 config/llm_config.json 读取 LLM 全量持久化配置（含 API Keys 与服务商映射）。"""
+    try:
+        if os.path.exists(LLM_CONFIG_FILE):
+            with open(LLM_CONFIG_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    return data
+    except Exception as e:
+        print(f"[WARN] 读取 LLM 配置文件失败: {e}")
+    return {"llm_config": {}, "provider_configs": {}}
+
+
+def _save_llm_config(data):
+    """保存 LLM 配置到 config/llm_config.json（跨终端/跨浏览器持久化）。"""
+    try:
+        os.makedirs(os.path.dirname(LLM_CONFIG_FILE), exist_ok=True)
+        with open(LLM_CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception as e:
+        print(f"[ERROR] 保存 LLM 配置文件失败: {e}")
+        return False
+
+
+@app.route("/api/llm-config", methods=["GET"])
+def api_llm_config_get():
+    return jsonify(_load_llm_config())
+
+
+@app.route("/api/llm-config", methods=["POST"])
+def api_llm_config_save():
+    """保存 LLM 配置到后端 config/llm_config.json。"""
+    data = request.get_json(force=True, silent=True) or {}
+    if _save_llm_config(data):
+        return jsonify({"ok": True})
+    return jsonify({"ok": False, "error": "保存 LLM 配置文件失败"}), 500
+
+
+@app.route("/api/llm-config", methods=["DELETE"])
+def api_llm_config_delete():
+    """重置/删除服务端 LLM 配置文件。"""
+    try:
+        if os.path.exists(LLM_CONFIG_FILE):
+            os.remove(LLM_CONFIG_FILE)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 # ========== 自定义模板持久化（后端文件存储，避免 localStorage 丢失） ==========
