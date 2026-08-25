@@ -324,6 +324,9 @@ def generate_titles(title: str, desc: str, tags: List[str],
         # 随机生成一个数字（3/5/10/99 等常见爆款数字）
         num = random.choice([3, 5, 7, 10, 99, 80, 90, 6, 8, 12])
         title_candidate = template.replace("{keyword}", kw).replace("{n}", str(num))
+        # 强制限制在 21 字以内（小红书最佳限制在 20 字以内）
+        if len(title_candidate) > 21:
+            title_candidate = title_candidate[:20].rstrip("｜·丨—→,，.!")
         candidates.append(title_candidate)
 
     # 评分排序
@@ -359,12 +362,14 @@ def _score_title(title: str) -> float:
     score = 50.0  # 基础分
     length = len(title)
 
-    # 长度评分：15-25 字最佳
-    if 15 <= length <= 25:
-        score += 15
-    elif 10 <= length <= 30:
-        score += 8
-    elif length < 8 or length > 35:
+    # 长度评分：小红书标题严格要求在 20 字以内（硬限制 21 字以内）
+    if 12 <= length <= 20:
+        score += 20
+    elif 8 <= length <= 21:
+        score += 10
+    elif length > 21:
+        score -= 35  # 超过 21 字严重扣分
+    else:
         score -= 10
 
     # 含数字

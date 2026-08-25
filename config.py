@@ -69,14 +69,14 @@ VIDEO_DEDUP = {
 IMAGE_DEDUP = {
     "mirror": False,           # 水平镜像（默认关闭：会颠倒图片里的文字；如需开启用 --mirror）
     "rotate": 0,               # 旋转角度（0/90/180/270），默认不旋转
-    "crop_ratio": 0.06,        # 四边裁剪（关闭镜像后加强）
+    "crop_ratio": 0.015,       # 四边极微裁切 1.5%（高清主体保护：绝对不过度裁切放大导致核心主体缺失，兼顾100%去重）
     "resize_back": True,       # 裁剪后放大回原尺寸
-    "brightness": 1.05,        # 亮度因子 (1.0=不变)
-    "contrast": 1.06,          # 对比度因子
-    "saturation": 1.12,        # 饱和度因子
-    "sharpness": 1.18,         # 锐度因子
-    "noise_amount": 3,         # 超轻微噪点
-    "quality": 98,             # 提升至 JPEG 98 超清画质
+    "brightness": 1.03,        # 亮度微调 (1.0=不变)
+    "contrast": 1.04,          # 对比度微调
+    "saturation": 1.08,        # 饱和度微调
+    "sharpness": 1.15,         # 锐度提升
+    "noise_amount": 2,         # 隐蔽高斯噪点（破坏像素级查重）
+    "quality": 98,             # 维持 JPEG 98 超清画质
     "subsampling": 0,          # 4:4:4 全色度无损采样（无色彩边缘模糊）
     "strip_exif": True,        # 去除 EXIF
     "format": "JPEG",          # 输出格式 JPEG/PNG

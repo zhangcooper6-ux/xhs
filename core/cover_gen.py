@@ -308,21 +308,60 @@ def _remove_text_from_image(image_path: str, out_path: str,
 
 # ---------- PIL 绘图工具 ----------
 
-def _load_image(path: str, target_w: int, target_h: int):
-    """加载图片并裁剪/缩放到目标尺寸（cover 模式：填满，居中裁剪）。"""
-    from PIL import Image
+def _clean_title_length(title: str, max_len: int = 20) -> str:
+    """清洗标题并严格限制在 20 字以内（硬限制不超过 21 字）。"""
+    if not title:
+        return ""
+    title = title.strip().strip("\"'\"\"''")
+    if len(title) > 21:
+        title = title[:20].rstrip("｜·丨—→,，.!?！？ ")
+    return title
+
+
+def _load_image(path: str, target_w: int, target_h: int, preserve_aspect: bool = True):
+    """加载图片并调整至目标尺寸（3:4 竖屏 1080x1440）。
+
+    优化核心主体完整度（解决过度裁剪导致人物/物件看不全问题）：
+    - 若原图宽高比与目标 3:4 接近（容差 15% 内）：进行平滑等比缩放 + 居中裁切。
+    - 若原图比例差异较大（如 16:9 横屏或超长屏）：采用【柔和羽化模糊背景 + 画面 100% 完整全景呈现】，
+      确保画面核心主体、物件、人物头部完全不被割裂切除！
+    """
+    from PIL import Image, ImageEnhance, ImageFilter
     img = Image.open(path).convert("RGB")
     w, h = img.size
-    # 计算缩放比例（取较大的，确保填满）
-    scale = max(target_w / w, target_h / h)
-    new_w = int(w * scale)
-    new_h = int(h * scale)
-    img = img.resize((new_w, new_h), Image.LANCZOS)
-    # 居中裁剪
-    left = (new_w - target_w) // 2
-    top = (new_h - target_h) // 2
-    img = img.crop((left, top, left + target_w, top + target_h))
-    return img
+
+    src_ratio = w / h if h > 0 else 1.0
+    tgt_ratio = target_w / target_h
+
+    # 宽高比偏差
+    ratio_diff = abs(src_ratio - tgt_ratio) / tgt_ratio
+
+    if ratio_diff < 0.15 or not preserve_aspect:
+        # 比例非常接近：高品质 Lanczos 重采样 + 极微平滑居中裁剪
+        scale = max(target_w / w, target_h / h)
+        new_w = int(w * scale)
+        new_h = int(h * scale)
+        img = img.resize((new_w, new_h), Image.LANCZOS)
+        left = (new_w - target_w) // 2
+        top = (new_h - target_h) // 2
+        return img.crop((left, top, left + target_w, top + target_h))
+    else:
+        # 比例差异较大（横屏/竖屏）：智能羽化背景 + 前景 100% 完整保留
+        bg = img.resize((target_w, target_h), Image.LANCZOS)
+        bg = bg.filter(ImageFilter.GaussianBlur(radius=32))
+        bg = ImageEnhance.Brightness(bg).enhance(0.70)
+
+        # 计算 100% contain 缩放比例
+        scale = min(target_w / w, target_h / h)
+        fg_w = int(w * scale)
+        fg_h = int(h * scale)
+        fg = img.resize((fg_w, fg_h), Image.LANCZOS)
+
+        pos_x = (target_w - fg_w) // 2
+        pos_y = (target_h - fg_h) // 2
+
+        bg.paste(fg, (pos_x, pos_y))
+        return bg
 
 
 def _create_gradient_bg(w: int, h: int, color1: Tuple, color2: Tuple,
@@ -462,14 +501,16 @@ def render_bigtext_style(base_path: str, title: str, out_path: str,
     """
     from PIL import Image, ImageDraw, ImageFont, ImageEnhance, ImageFilter
 
-    # 随机选一组高饱和渐变色
+    title = _clean_title_length(title, 20)
+
+    # 随机选一组高饱和小红书爆款渐变色
     color_schemes = [
-        ((255, 94, 98), (255, 165, 102)),    # 红橙
-        ((255, 175, 189), (255, 195, 113)),  # 粉黄
-        ((168, 237, 234), (254, 214, 247)),  # 青粉
-        ((255, 206, 84), (255, 111, 145)),   # 黄粉
-        ((123, 201, 196), (255, 222, 89)),   # 青黄
-        ((255, 154, 158), (250, 208, 196)),  # 粉肉
+        ((255, 94, 98), (255, 165, 102)),    # 爆款红橙
+        ((255, 175, 189), (255, 195, 113)),  # 柔粉马卡龙
+        ((168, 237, 234), (254, 214, 247)),  # 高级薄荷粉
+        ((255, 206, 84), (255, 111, 145)),   # 醒目黄粉
+        ((123, 201, 196), (255, 222, 89)),   # 清爽青黄
+        ((255, 154, 158), (250, 208, 196)),  # 奶气粉肉
     ]
     color1, color2 = random.choice(color_schemes)
 
@@ -479,7 +520,7 @@ def render_bigtext_style(base_path: str, title: str, out_path: str,
     # 如果有底图，叠加半透明底图（增加质感）
     if base_path and os.path.exists(base_path):
         try:
-            base = _load_image(base_path, COVER_W, COVER_H)
+            base = _load_image(base_path, COVER_W, COVER_H, preserve_aspect=True)
             # 模糊处理作为背景纹理
             base = base.filter(ImageFilter.GaussianBlur(radius=30))
             base = ImageEnhance.Brightness(base).enhance(0.7)
@@ -505,11 +546,12 @@ def render_bigtext_style(base_path: str, title: str, out_path: str,
         line_w = bbox[2] - bbox[0]
         x = (COVER_W - line_w) // 2
         y = start_y + i * line_height
-        # 黑色粗描边 + 白色主字
+        # 黑色粗描边 + 黄白高亮主字
+        text_fill = (255, 242, 0) if i == 0 else (255, 255, 255)
         _draw_text_with_outline(draw, (x, y), line, font,
-                                fill=(255, 255, 255),
+                                fill=text_fill,
                                 outline=(0, 0, 0),
-                                outline_width=5)
+                                outline_width=6)
 
     # 添加 emoji 贴纸（右下角/左上角装饰）
     emoji_paths = _get_random_emojis(emoji_count)
@@ -522,7 +564,6 @@ def render_bigtext_style(base_path: str, title: str, out_path: str,
         for i, ep in enumerate(emoji_paths[:3]):
             try:
                 emoji = Image.open(ep).convert("RGBA")
-                # 缩放到 120x120
                 emoji = emoji.resize((120, 120), Image.LANCZOS)
                 bg.paste(emoji, positions[i], emoji)
             except Exception:
@@ -532,7 +573,7 @@ def render_bigtext_style(base_path: str, title: str, out_path: str,
     draw.rectangle([(0, COVER_H - 8), (COVER_W, COVER_H)],
                    fill=(255, 255, 255, 200))
 
-    bg.save(out_path, quality=95)
+    bg.save(out_path, quality=98, subsampling=0)
     logger.info("大字报风封面: %s", out_path)
     return out_path
 
@@ -544,14 +585,14 @@ def render_bottombar_style(base_path: str, title: str, out_path: str) -> str:
     """
     from PIL import Image, ImageDraw, ImageFont, ImageEnhance, ImageFilter
 
+    title = _clean_title_length(title, 20)
+
     # 必须有底图
     if not base_path or not os.path.exists(base_path):
-        # 兜底：用纯色背景
         bg = Image.new("RGB", (COVER_W, COVER_H), (40, 40, 40))
     else:
-        bg = _load_image(base_path, COVER_W, COVER_H)
-        # 轻微增强饱和度
-        bg = ImageEnhance.Color(bg).enhance(1.15)
+        bg = _load_image(base_path, COVER_W, COVER_H, preserve_aspect=True)
+        bg = ImageEnhance.Color(bg).enhance(1.12)
 
     draw = ImageDraw.Draw(bg, "RGBA")
 
@@ -559,17 +600,15 @@ def render_bottombar_style(base_path: str, title: str, out_path: str) -> str:
     bar_height = 500
     try:
         import numpy as np
-        # 从透明 (0) 到黑色 200
-        alpha = np.linspace(0, 200, bar_height).astype(np.uint8)
+        alpha = np.linspace(0, 210, bar_height).astype(np.uint8)
         overlay = np.zeros((bar_height, COVER_W, 4), dtype=np.uint8)
-        overlay[:, :, 3] = alpha[:, None]  # 广播到宽度
+        overlay[:, :, 3] = alpha[:, None]
         from PIL import Image as PILImage
         overlay_img = PILImage.fromarray(overlay, "RGBA")
         bg.paste(overlay_img, (0, COVER_H - bar_height), overlay_img)
     except ImportError:
-        # 纯渐变兜底
         for y in range(bar_height):
-            alpha = int(200 * y / bar_height)
+            alpha = int(210 * y / bar_height)
             draw.rectangle([(0, COVER_H - bar_height + y), (COVER_W, COVER_H - bar_height + y + 1)],
                            fill=(0, 0, 0, alpha))
 
@@ -592,14 +631,14 @@ def render_bottombar_style(base_path: str, title: str, out_path: str) -> str:
         _draw_text_with_outline(draw, (x, y), line, font,
                                 fill=(255, 255, 255),
                                 outline=(0, 0, 0),
-                                outline_width=3)
+                                outline_width=4)
 
     # 左下角小标签
     tag_font_path = _find_font(36, bold=False)
     tag_font = ImageFont.truetype(tag_font_path, 36) if tag_font_path else ImageFont.load_default()
-    draw.text((60, COVER_H - 60), "✨ 精彩内容", font=tag_font, fill=(255, 255, 255, 220))
+    draw.text((60, COVER_H - 60), "✨ 精彩内容推荐", font=tag_font, fill=(255, 255, 255, 230))
 
-    bg.save(out_path, quality=95)
+    bg.save(out_path, quality=98, subsampling=0)
     logger.info("底部字幕条风封面: %s", out_path)
     return out_path
 
@@ -611,21 +650,22 @@ def render_topbar_style(base_path: str, title: str, out_path: str) -> str:
     """
     from PIL import Image, ImageDraw, ImageFont, ImageEnhance
 
+    title = _clean_title_length(title, 20)
+
     # 底图
     if not base_path or not os.path.exists(base_path):
         bg = Image.new("RGB", (COVER_W, COVER_H), (245, 245, 245))
     else:
-        bg = _load_image(base_path, COVER_W, COVER_H)
+        bg = _load_image(base_path, COVER_W, COVER_H, preserve_aspect=True)
         bg = ImageEnhance.Color(bg).enhance(1.1)
 
     draw = ImageDraw.Draw(bg, "RGBA")
 
     # 顶部高亮色条（高度 350）
     bar_height = 350
-    # 随机高亮色
     bar_colors = [
         (255, 94, 98),     # 珊瑚红
-        (255, 165, 102),   # 橙色
+        (255, 165, 102),   # 阳光橙
         (255, 206, 84),    # 明黄
         (123, 201, 196),   # 薄荷绿
         (255, 111, 145),   # 玫红
@@ -654,7 +694,6 @@ def render_topbar_style(base_path: str, title: str, out_path: str) -> str:
 
     draw = ImageDraw.Draw(bg, "RGBA")
 
-    # 顶部标题（自适应字号，不截断，最多 3 行）
     font_path = _find_font(90, bold=True)
     font, lines, line_height, total_h = _fit_font_size(
         title, max_width=COVER_W - 120, max_lines=3,
@@ -676,14 +715,14 @@ def render_topbar_style(base_path: str, title: str, out_path: str) -> str:
     # 底部小标题/副标题
     sub_font_path = _find_font(42, bold=False)
     sub_font = ImageFont.truetype(sub_font_path, 42) if sub_font_path else ImageFont.load_default()
-    subtitles = ["详细教程看视频 →", "完整内容点进来看", "记得收藏不迷路", "干货满满记得点赞"]
+    subtitles = ["🔥 详细教程看视频 →", "✨ 完整干货点进来看", "📌 记得收藏不迷路", "💡 干货满满点赞保存"]
     sub = random.choice(subtitles)
     bbox = draw.textbbox((0, 0), sub, font=sub_font)
     sub_w = bbox[2] - bbox[0]
     draw.text(((COVER_W - sub_w) // 2, COVER_H - 120), sub,
-              font=sub_font, fill=(80, 80, 80))
+              font=sub_font, fill=(255, 255, 255))
 
-    bg.save(out_path, quality=95)
+    bg.save(out_path, quality=98, subsampling=0)
     logger.info("顶部标题条风封面: %s", out_path)
     return out_path
 
@@ -696,19 +735,18 @@ def render_magazine_style(base_path: str, title: str, video_path: str = None,
     """
     from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
+    title = _clean_title_length(title, 20)
+
     # 需要收集 3 张图片
     images = []
-    # 主底图
     if base_path and os.path.exists(base_path):
         images.append(base_path)
 
-    # 从视频抽 2 帧补充
     if video_path and os.path.exists(video_path) and len(images) < 3:
         try:
             import cv2
             cap = cv2.VideoCapture(video_path)
             total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            # 抽 25%、60%、85% 位置的帧
             ratios = [0.25, 0.6, 0.85]
             for r in ratios:
                 if len(images) >= 3:
@@ -725,46 +763,36 @@ def render_magazine_style(base_path: str, title: str, video_path: str = None,
         except Exception as e:
             logger.debug("抽帧补充失败: %s", e)
 
-    # 如果图片不够 3 张，复制已有的
     while len(images) < 3:
         if images:
             images.append(images[0])
         else:
-            # 兜底纯色
             tmp_path = os.path.join(os.path.dirname(out_path), "_solid_bg.jpg")
             Image.new("RGB", (COVER_W, COVER_H), (200, 200, 200)).save(tmp_path)
             images.append(tmp_path)
 
-    # 拼图布局：左图 + 右上图 + 右下图，中间留白放标题
     bg = Image.new("RGB", (COVER_W, COVER_H), (255, 255, 255))
-    draw = ImageDraw.Draw(bg, "RGBA")
 
-    # 左侧大图（占 55% 宽度，100% 高度）
     left_w = int(COVER_W * 0.55)
-    left_img = _load_image(images[0], left_w, COVER_H)
+    left_img = _load_image(images[0], left_w, COVER_H, preserve_aspect=True)
     bg.paste(left_img, (0, 0))
 
-    # 右侧上图（45% 宽度，50% 高度）
     right_w = COVER_W - left_w
     right_h = COVER_H // 2
-    right_top_img = _load_image(images[1], right_w, right_h)
+    right_top_img = _load_image(images[1], right_w, right_h, preserve_aspect=True)
     bg.paste(right_top_img, (left_w, 0))
 
-    # 右侧下图
-    right_bot_img = _load_image(images[2], right_w, COVER_H - right_h)
+    right_bot_img = _load_image(images[2], right_w, COVER_H - right_h, preserve_aspect=True)
     bg.paste(right_bot_img, (left_w, right_h))
 
-    # 中间标题区域（半透明白色遮罩）
     overlay = Image.new("RGBA", (COVER_W, COVER_H), (0, 0, 0, 0))
     overlay_draw = ImageDraw.Draw(overlay)
-    # 中间横条遮罩
     band_y = (COVER_H - 320) // 2
     overlay_draw.rectangle([(0, band_y), (COVER_W, band_y + 320)],
-                           fill=(255, 255, 255, 230))
+                           fill=(255, 255, 255, 235))
     bg = Image.alpha_composite(bg.convert("RGBA"), overlay).convert("RGB")
     draw = ImageDraw.Draw(bg, "RGBA")
 
-    # 中间大标题（自适应字号，不截断，最多 3 行）
     font_path = _find_font(110, bold=True)
     font, lines, line_height, total_h = _fit_font_size(
         title, max_width=COVER_W - 100, max_lines=3,
@@ -778,15 +806,14 @@ def render_magazine_style(base_path: str, title: str, video_path: str = None,
         line_w = bbox[2] - bbox[0]
         x = (COVER_W - line_w) // 2
         y = start_y + i * line_height
-        draw.text((x, y), line, font=font, fill=(40, 40, 40))
+        draw.text((x, y), line, font=font, fill=(35, 35, 35))
 
-    # 装饰线
     draw.line([(100, band_y + 20), (COVER_W - 100, band_y + 20)],
-              fill=(200, 200, 200), width=2)
+              fill=(220, 50, 50), width=3)
     draw.line([(100, band_y + 300), (COVER_W - 100, band_y + 300)],
-              fill=(200, 200, 200), width=2)
+              fill=(220, 50, 50), width=3)
 
-    bg.save(out_path, quality=95)
+    bg.save(out_path, quality=98, subsampling=0)
     logger.info("杂志拼图风封面: %s", out_path)
 
     # 清理临时帧
@@ -1000,7 +1027,8 @@ def _render_ai_product_hero(ai_image_path: str, title: str, hook: str,
     """AI 封面风格 1：杂志大片感产品主角 + 爽点文案 + 信任标签（权威性心理）。"""
     from PIL import Image, ImageDraw, ImageFont, ImageEnhance, ImageFilter
     import numpy as np
-    bg = _load_image(ai_image_path, COVER_W, COVER_H)
+    title = _clean_title_length(title, 20)
+    bg = _load_image(ai_image_path, COVER_W, COVER_H, preserve_aspect=True)
     bg = ImageEnhance.Color(bg).enhance(1.12)
     bg = ImageEnhance.Brightness(bg).enhance(1.05)
     bg = ImageEnhance.Sharpness(bg).enhance(1.08)
