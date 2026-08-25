@@ -212,7 +212,40 @@ def _build_creative_layers(cur_label, fc_parts, extra_inputs, target_w, target_h
         cur_label = new_label
         input_idx += 1
 
-    # ---- 4. 爆款 Hook 顶部标题卡（前3秒黄金留存关键）----\n    top_hook = creative.get("top_hook", True)\n    if top_hook and caption_text:\n        font = _find_font()\n        if font:\n            hook_style = creative.get("top_hook_style", "viral_yellow")\n            if hook_style == "viral_yellow":\n                bg_col, text_col = "yellow@0.95", "black"\n            elif hook_style == "viral_red":\n                bg_col, text_col = "red@0.90", "white"\n            else:\n                bg_col, text_col = "white@0.95", "black"\n\n            bar_h = int(target_h * 0.065)\n            fontsize = int(bar_h * 0.55)\n            bar_y = int(target_h * 0.08)  # 居顶部约 8% 位置，醒目且不挡视频主体\n            text_y = bar_y + (bar_h - fontsize) // 2\n\n            txt_file = _write_text_file(caption_text, tmp_dir, prefix="hook_")\n            wm_files.append(txt_file)\n            txt_escaped = _esc_path(txt_file)\n            font_escaped = _esc_path(font)\n\n            bar_label = f"{cur_label}_hookbar"\n            hook_label = "hook_out"\n            fc_parts.append(\n                f"[{cur_label}]drawbox=x=int((iw-tw)/2)-24:y={bar_y}:w=tw+48:h={bar_h}:"\n                f"color={bg_col}:t=fill[{bar_label}]\")\n            fc_parts.append(\n                f"[{bar_label}]drawtext=fontfile='{font_escaped}':"\n                f"textfile='{txt_escaped}':fontsize={fontsize}:bold=1:"\n                f"fontcolor={text_col}:x=(w-tw)/2:y={text_y}[{hook_label}]\")\n            cur_label = hook_label\n            logger.info("添加前3秒黄金 Hook 标题卡: %s", caption_text[:20])
+    # ---- 4. 爆款 Hook 顶部标题卡（前3秒黄金留存关键）----
+    top_hook = creative.get("top_hook", True)
+    if top_hook and caption_text:
+        font = _find_font()
+        if font:
+            hook_style = creative.get("top_hook_style", "viral_yellow")
+            if hook_style == "viral_yellow":
+                bg_col, text_col = "yellow@0.95", "black"
+            elif hook_style == "viral_red":
+                bg_col, text_col = "red@0.90", "white"
+            else:
+                bg_col, text_col = "white@0.95", "black"
+
+            bar_h = int(target_h * 0.065)
+            fontsize = int(bar_h * 0.55)
+            bar_y = int(target_h * 0.08)  # 居顶部约 8% 位置，醒目且不挡视频主体
+            text_y = bar_y + (bar_h - fontsize) // 2
+
+            txt_file = _write_text_file(caption_text, tmp_dir, prefix="hook_")
+            wm_files.append(txt_file)
+            txt_escaped = _esc_path(txt_file)
+            font_escaped = _esc_path(font)
+
+            bar_label = f"{cur_label}_hookbar"
+            hook_label = "hook_out"
+            fc_parts.append(
+                f"[{cur_label}]drawbox=x=int((iw-tw)/2)-24:y={bar_y}:w=tw+48:h={bar_h}:"
+                f"color={bg_col}:t=fill[{bar_label}]")
+            fc_parts.append(
+                f"[{bar_label}]drawtext=fontfile='{font_escaped}':"
+                f"textfile='{txt_escaped}':fontsize={fontsize}:bold=1:"
+                f"fontcolor={text_col}:x=(w-tw)/2:y={text_y}[{hook_label}]")
+            cur_label = hook_label
+            logger.info("添加前3秒黄金 Hook 标题卡: %s", caption_text[:20])
 
     # ---- 5. 普通字幕条 ----
     if (creative.get("caption_enabled") and
