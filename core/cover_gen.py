@@ -765,6 +765,131 @@ def render_magazine_style(base_path: str, title: str, out_path: str, video_path:
     return out_path
 
 
+
+
+def render_vlog_card_style(base_path: str, title: str, out_path: str, video_path: str = None) -> str:
+    """模板 5：VLOG生活记录微透卡片风（极具治感/日常小确幸/人像/日常）。
+
+    特点：全画幅超清原图 + 居中极简微透奶油风圆角卡片 + 双色柔和标题。
+    """
+    from PIL import Image, ImageDraw, ImageFont, ImageFilter
+
+    info = _parse_title_for_cover(title)
+    if base_path and os.path.exists(base_path):
+        bg = _fit_crop_image(Image.open(base_path).convert("RGB"), COVER_W, COVER_H)
+    else:
+        photos = _collect_4_photos(base_path, video_path)
+        bg = _create_4grid_canvas(photos)
+
+    # 居中悬浮极简奶油微透卡片
+    card_w = COVER_W - 140
+    card_h = 320
+    card_x = 70
+    card_y = (COVER_H - card_h) // 2
+
+    # 1. 柔和下沉高斯阴影
+    shadow = Image.new("RGBA", bg.size, (0, 0, 0, 0))
+    s_draw = ImageDraw.Draw(shadow)
+    s_draw.rounded_rectangle(
+        [(card_x, card_y + 8), (card_x + card_w, card_y + card_h + 8)],
+        radius=26, fill=(0, 0, 0, 75)
+    )
+    shadow = shadow.filter(ImageFilter.GaussianBlur(radius=16))
+    bg.paste(shadow, (0, 0), shadow)
+
+    # 2. 奶油微透卡片 (带 2px 细边框)
+    card = Image.new("RGBA", bg.size, (0, 0, 0, 0))
+    c_draw = ImageDraw.Draw(card)
+    c_draw.rounded_rectangle(
+        [(card_x, card_y), (card_x + card_w, card_y + card_h)],
+        radius=26, fill=(255, 255, 255, 242),
+        outline=(240, 240, 245), width=2
+    )
+    bg.paste(card, (0, 0), card)
+
+    # 3. 顶部微型 Tag
+    font_path = _find_font(30, bold=True)
+    tag_font = ImageFont.truetype(font_path, 30) if font_path else ImageFont.load_default()
+    d = ImageDraw.Draw(bg)
+    tag_text = f"✨ MY VLOG DIARY · {info['tag']}"
+    bbox = d.textbbox((0, 0), tag_text, font=tag_font)
+    tw = bbox[2] - bbox[0]
+    d.text(((COVER_W - tw) // 2, card_y + 32), tag_text, font=tag_font, fill=(255, 36, 66))
+
+    # 4. 主标题
+    font_main_path = _find_font(78, bold=True)
+    font_main = ImageFont.truetype(font_main_path, 78) if font_main_path else ImageFont.load_default()
+    full_title = f"{info['line1']} {info['line2']}" if info['line2'] else info['line1']
+    bbox = d.textbbox((0, 0), full_title, font=font_main)
+    mw = bbox[2] - bbox[0]
+    d.text(((COVER_W - mw) // 2, card_y + 95), full_title, font=font_main, fill=(24, 24, 28))
+
+    # 5. 底部一句话
+    sub_font_path = _find_font(32, bold=False)
+    sub_font = ImageFont.truetype(sub_font_path, 32) if sub_font_path else ImageFont.load_default()
+    sub_text = f"“ {info['sub']} ”"
+    bbox = d.textbbox((0, 0), sub_text, font=sub_font)
+    sw = bbox[2] - bbox[0]
+    d.text(((COVER_W - sw) // 2, card_y + 215), sub_text, font=sub_font, fill=(120, 120, 130))
+
+    bg.save(out_path, quality=98, subsampling=0)
+    logger.info("模板5(VLOG微透卡片): %s", out_path)
+    return out_path
+
+
+def render_list_banner_style(base_path: str, title: str, out_path: str, video_path: str = None) -> str:
+    """模板 6：清单干货三图横幅风（干货清单/推荐榜单/对比榜）。
+
+    特点：3 张实拍图片垂直三分切片 + 顶部黑金双色超大标题横幅。
+    """
+    from PIL import Image, ImageDraw, ImageFont
+
+    info = _parse_title_for_cover(title)
+    photos = _collect_4_photos(base_path, video_path)
+    
+    # 3 张图片垂直三分切片
+    gutter = 6
+    cell_h = (COVER_H - gutter * 2) // 3  # ~474
+    bg = Image.new("RGB", (COVER_W, COVER_H), (255, 255, 255))
+
+    for i in range(3):
+        p = _fit_crop_image(photos[i], COVER_W, cell_h)
+        bg.paste(p, (0, i * (cell_h + gutter)))
+
+    # 顶部黑金双色超大标题横幅 (Y: 100 ~ 440)
+    banner_w = COVER_W - 100
+    banner_h = 320
+    bx = 50
+    by = 100
+
+    _draw_large_card(
+        bg, (bx, by), f"📌 {info['tag']}", 
+        ImageFont.truetype(_find_font(36, bold=True), 36),
+        bg_color=(255, 230, 0, 255), text_color=(18, 18, 20),
+        pad_x=24, pad_y=12, radius=18, shadow_blur=12, shadow_alpha=90
+    )
+
+    font_main_path = _find_font(88, bold=True)
+    font_main = ImageFont.truetype(font_main_path, 88) if font_main_path else ImageFont.load_default()
+
+    w1, h1 = _draw_large_card(
+        bg, (bx, by + 75), info["line1"], font_main,
+        bg_color=(18, 18, 24, 250), text_color=(255, 255, 255),
+        pad_x=36, pad_y=20, radius=22, shadow_blur=16, shadow_alpha=110
+    )
+
+    if info["line2"]:
+        _draw_large_card(
+            bg, (bx, by + 75 + h1 + 14), info["line2"], font_main,
+            bg_color=(255, 36, 66, 245), text_color=(255, 255, 255),
+            pad_x=36, pad_y=20, radius=22, shadow_blur=16, shadow_alpha=110
+        )
+
+    bg.save(out_path, quality=98, subsampling=0)
+    logger.info("模板6(清单三图横幅): %s", out_path)
+    return out_path
+
+
 # ---------- 主入口：生成所有风格的封面 ----------
 
 def generate_covers(title: str, cover_url: str = None, video_path: str = None,
@@ -816,7 +941,7 @@ def generate_covers(title: str, cover_url: str = None, video_path: str = None,
     os.makedirs(out_dir, exist_ok=True)
 
     if styles is None:
-        styles = ["bigtext", "bottombar", "topbar", "magazine"]
+        styles = ["bigtext", "bottombar", "topbar", "magazine", "vlog_card", "list_banner"]
 
     # === LLM 生成封面标题（如启用） ===
     title_source = "user"  # 用户指定或二创 Top1
@@ -904,6 +1029,10 @@ def generate_covers(title: str, cover_url: str = None, video_path: str = None,
                 render_topbar_style(base_for_render, title, out_path, video_path=video_path)
             elif style == "magazine":
                 render_magazine_style(base_for_render, title, out_path, video_path=video_path)
+            elif style == "vlog_card":
+                render_vlog_card_style(base_for_render, title, out_path, video_path=video_path)
+            elif style == "list_banner":
+                render_list_banner_style(base_for_render, title, out_path, video_path=video_path)
             else:
                 logger.warning("未知封面风格: %s", style)
                 continue
