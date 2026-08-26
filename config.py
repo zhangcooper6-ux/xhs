@@ -392,7 +392,7 @@ FILTER = {
 # ---------- 封面生成 ----------
 COVER = {
     "enabled": True,            # 是否生成封面（默认开启，--no-cover 关闭）
-    "styles": ["bigtext", "bottombar", "topbar", "magazine"],  # 生成的风格
+    "styles": ["bigtext", "bottombar", "topbar", "magazine", "vlog_card", "list_banner"],  # 生成的风格（全部 6 种爆款风格）
     "n_titles": 10,             # 文案二创生成的标题候选数量
     "title_max_len": 12,        # 封面标题最大字数（超出截断）
     "frame_time_ratio": 0.3,    # 视频抽帧位置（0.3=跳过片头黑屏）
