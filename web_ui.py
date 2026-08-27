@@ -19,7 +19,7 @@ import subprocess
 import queue
 import re
 
-from flask import Flask, request, jsonify, Response, send_from_directory, abort
+from flask import Flask, request, jsonify, Response, send_from_directory, abort, make_response
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 WEB_DIR = os.path.join(BASE_DIR, "web")
