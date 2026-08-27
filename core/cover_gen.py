@@ -528,6 +528,69 @@ def _draw_large_card(bg_img: "Image.Image", xy: tuple, text: str, font,
     return card_w, card_h
 
 
+def _load_image(path: str, target_w: int = COVER_W, target_h: int = COVER_H, preserve_aspect: bool = True) -> "Image.Image":
+    """加载图片并高质量裁切/缩放到目标尺寸（3:4 竖屏 1080x1440）。"""
+    from PIL import Image, ImageDraw
+    if not path or not os.path.exists(path):
+        base = Image.new("RGB", (target_w, target_h), (245, 240, 235))
+        d = ImageDraw.Draw(base)
+        d.rectangle([(40, 40), (target_w - 40, target_h - 40)], outline=(220, 215, 210), width=4)
+        return base
+
+    img = Image.open(path).convert("RGB")
+    return _fit_crop_image(img, target_w, target_h)
+
+
+def _wrap_text(text: str, font, max_width: int, draw) -> List[str]:
+    """文字自动换行（按像素宽度）。"""
+    lines = []
+    current = ""
+    for char in text:
+        test = current + char
+        bbox = draw.textbbox((0, 0), test, font=font)
+        if bbox[2] - bbox[0] > max_width and current:
+            lines.append(current)
+            current = char
+        else:
+            current = test
+    if current:
+        lines.append(current)
+    return lines
+
+
+def _fit_font_size(title: str, max_width: int, max_lines: int,
+                    max_size: int, min_size: int, font_path: str,
+                    draw, line_gap: int = 20) -> tuple:
+    """自适应字号：根据标题长度动态缩放字号，确保完整显示不截断。"""
+    from PIL import ImageFont
+    for size in range(max_size, min_size - 1, -4):
+        font = ImageFont.truetype(font_path, size) if font_path else ImageFont.load_default()
+        lines = _wrap_text(title, font, max_width, draw)
+        if len(lines) <= max_lines:
+            line_height = size + line_gap
+            total_h = len(lines) * line_height
+            return font, lines, line_height, total_h
+    font = ImageFont.truetype(font_path, min_size) if font_path else ImageFont.load_default()
+    lines = _wrap_text(title, font, max_width, draw)
+    if len(lines) > max_lines:
+        lines = lines[:max_lines]
+        lines[-1] = lines[-1][:-1] + "…" if len(lines[-1]) > 1 else lines[-1]
+    line_height = min_size + line_gap
+    total_h = len(lines) * line_height
+    return font, lines, line_height, total_h
+
+
+def _draw_text_with_outline(draw, xy, text, font, fill, outline, outline_width=3):
+    """绘制带描边的文字。"""
+    x, y = xy
+    for dx in range(-outline_width, outline_width + 1):
+        for dy in range(-outline_width, outline_width + 1):
+            if dx == 0 and dy == 0:
+                continue
+            draw.text((x + dx, y + dy), text, font=font, fill=outline)
+    draw.text((x, y), text, font=font, fill=fill)
+
+
 # ---------- 4 种拆解爆款封面模板 ----------
 
 def render_bigtext_style(base_path: str, title: str, out_path: str, video_path: str = None) -> str:

@@ -242,7 +242,7 @@ def _build_creative_layers(cur_label, fc_parts, extra_inputs, target_w, target_h
                 f"color={bg_col}:t=fill[{bar_label}]")
             fc_parts.append(
                 f"[{bar_label}]drawtext=fontfile='{font_escaped}':"
-                f"textfile='{txt_escaped}':fontsize={fontsize}:bold=1:"
+                f"textfile='{txt_escaped}':fontsize={fontsize}:"
                 f"fontcolor={text_col}:x=(w-tw)/2:y={text_y}[{hook_label}]")
             cur_label = hook_label
             logger.info("添加前3秒黄金 Hook 标题卡: %s", caption_text[:20])
