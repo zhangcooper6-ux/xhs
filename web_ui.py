@@ -204,8 +204,8 @@ PARAM_GROUPS = [
             {"key": "no_voice", "flag": "--no-voice", "label": "关闭 AI 配音", "type": "bool",
              "default": False, "help": "即使 config.TTS.enabled=True 也跳过配音"},
             {"key": "tts_provider", "flag": "--tts-provider", "label": "TTS 服务商", "type": "choice",
-             "default": "edge", "choices": ["edge", "volcengine"],
-             "help": "edge(免费,26音色) volcengine(火山引擎,需APP ID+Access Key,24音色,自然度更高)。配置自动保存到浏览器"},
+             "default": "edge", "choices": ["edge", "volcengine", "elevenlabs"],
+             "help": "edge(免费,26音色) volcengine(火山引擎) elevenlabs(ElevenLabs超真实/S2S变声)。配置自动保存到浏览器"},
             {"key": "volcengine_app_id", "flag": "--volcengine-app-id", "label": "火山引擎 APP ID", "type": "password",
              "default": "", "placeholder": "选 volcengine 时必填",
              "depends_on": "tts_provider", "depends_value": "volcengine",
@@ -214,6 +214,14 @@ PARAM_GROUPS = [
              "default": "", "placeholder": "选 volcengine 时必填",
              "depends_on": "tts_provider", "depends_value": "volcengine",
              "help": "火山引擎控制台 → 语音合成 → 应用管理 → Access Token。配置自动保存到浏览器本地"},
+            {"key": "elevenlabs_api_key", "flag": "--elevenlabs-api-key", "label": "ElevenLabs Key", "type": "password",
+             "default": "", "placeholder": "选 elevenlabs 时必填（sk_...）",
+             "depends_on": "tts_provider", "depends_value": "elevenlabs",
+             "help": "ElevenLabs API Key。配置自动保存到浏览器本地"},
+            {"key": "use_s2s", "flag": "--use-s2s", "label": "S2S 变声模式", "type": "bool",
+             "default": False,
+             "depends_on": "tts_provider", "depends_value": "elevenlabs",
+             "help": "Speech-to-Speech: 提取原视频音频进行变声，100% 完美继承原视频的情绪、语气、停顿与喊话高潮！"},
             {"key": "voice_text", "flag": "--voice-text", "label": "配音文本", "type": "str",
              "default": "", "placeholder": "留空=用笔记标题+描述自动生成",
              "help": "自定义配音文本（默认用笔记标题+描述）"},
@@ -493,7 +501,7 @@ PRESETS = [
 
 # ========== 列表数据采集（从 core 模块读取，避免硬编码重复） ==========
 def _collect_voices():
-    """采集全部配音（edge 26 + 火山引擎 24）。"""
+    """采集全部配音（edge 26 + 火山引擎 24 + ElevenLabs 6）。"""
     try:
         from core import tts as tts_mod
         edge = []
@@ -508,9 +516,15 @@ def _collect_voices():
                 "alias": alias, "name": voice_type, "provider": "volcengine",
                 "desc": tts_mod.VOLCENGINE_VOICE_DESCRIPTIONS.get(alias, alias),
             })
-        return {"edge": edge, "volcengine": volc}
+        eleven = []
+        for alias, voice_id in tts_mod.ELEVENLABS_VOICES.items():
+            eleven.append({
+                "alias": alias, "name": voice_id, "provider": "elevenlabs",
+                "desc": tts_mod.ELEVENLABS_VOICE_DESCRIPTIONS.get(alias, alias),
+            })
+        return {"edge": edge, "volcengine": volc, "elevenlabs": eleven}
     except Exception as e:
-        return {"edge": [], "volcengine": [], "error": str(e)}
+        return {"edge": [], "volcengine": [], "elevenlabs": [], "error": str(e)}
 
 
 def _collect_filters():
@@ -1169,12 +1183,18 @@ def api_voice_preview():
     if voice.startswith("bd_"):
         return jsonify({"ok": False, "msg": "火山引擎音色需 API Key，不支持免费试听，请用 --voice bd_xxx 实际运行体验"}), 400
 
+    provider = "edge"
+    if voice.startswith("el_") or len(voice) >= 15:
+        provider = "elevenlabs"
+
     try:
         from core import tts as tts_mod
     except Exception as e:
         return jsonify({"ok": False, "msg": f"tts 模块加载失败: {e}"}), 500
 
-    if not tts_mod._HAS_EDGE_TTS:
+    if provider == "elevenlabs" and not tts_mod._has_elevenlabs():
+        return jsonify({"ok": False, "msg": "ElevenLabs 未配置 API Key，无法试听，请设置 ELEVENLABS_API_KEY"}), 400
+    if provider == "edge" and not tts_mod._HAS_EDGE_TTS:
         return jsonify({"ok": False, "msg": "edge-tts 未安装，请运行: pip install edge-tts"}), 500
 
     # 生成临时文件
@@ -1185,7 +1205,7 @@ def api_voice_preview():
 
     try:
         r = tts_mod.generate_tts(text, out_path, voice=voice, rate=rate, pitch=pitch,
-                                 volume="+0%", clean=True, provider="edge")
+                                 volume="+0%", clean=True, provider=provider)
         if r and os.path.exists(r):
             return jsonify({"ok": True, "url": f"/api/preview-file/{os.path.basename(r)}",
                             "path": r})

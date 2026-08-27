@@ -323,6 +323,11 @@ def _build_tts_params(args):
         os.environ["VOLCENGINE_APP_ID"] = args.volcengine_app_id
     if getattr(args, "volcengine_access_key", None):
         os.environ["VOLCENGINE_ACCESS_KEY"] = args.volcengine_access_key
+    if getattr(args, "elevenlabs_api_key", None):
+        os.environ["ELEVENLABS_API_KEY"] = args.elevenlabs_api_key
+        t["elevenlabs_api_key"] = args.elevenlabs_api_key
+    if getattr(args, "use_s2s", False):
+        t["use_s2s"] = True
     if args.tts_provider is not None:
         t["provider"] = args.tts_provider
     if args.voice is not None:
@@ -345,9 +350,11 @@ def _build_tts_params(args):
         t["fit_duration"] = False
     if args.no_clean_text:
         t["clean_text"] = False
-    # 火山引擎服务的智能校验：若选择了火山引擎的音色但没指定 provider，自动切换
+    # 智能校验：若选择了火山/ElevenLabs的音色但没指定 provider，自动切换
     if t.get("enabled") and t.get("voice", "").startswith("bd_") and t.get("provider") == "edge":
         t["provider"] = "volcengine"
+    elif t.get("enabled") and t.get("voice", "").startswith("el_") and t.get("provider") == "edge":
+        t["provider"] = "elevenlabs"
     return t
 
 
@@ -668,23 +675,21 @@ def main(argv=None):
                         help="whisper 模型大小（默认 base）")
     # AI 配音参数（支持 edge-tts 和 火山引擎 Seed-TTS 2.0）
     parser.add_argument("--tts-provider", default=None,
-                        choices=["edge", "volcengine"],
-                        help="TTS 服务商: edge(edge-tts,默认,免费,26个中文配音) / "
-                             "volcengine(火山引擎Seed-TTS 2.0,需API key,24个音色,自然度更高)。"
-                             "选择火山引擎时需设置环境变量 VOLCENGINE_APP_ID 和 VOLCENGINE_ACCESS_KEY，"
-                             "或用 --volcengine-app-id / --volcengine-access-key 参数指定")
+                        choices=["edge", "volcengine", "elevenlabs"],
+                        help="TTS 服务商: edge(edge-tts,默认,免费) / "
+                             "volcengine(火山引擎Seed-TTS 2.0,需API key) / "
+                             "elevenlabs(ElevenLabs 超真实/S2S变声,需API key)。")
     parser.add_argument("--volcengine-app-id", default=None,
-                        help="火山引擎 TTS 的 APP ID（覆盖环境变量 VOLCENGINE_APP_ID）。"
-                             "获取方式: 火山引擎控制台 → 语音合成 → 应用管理 → APP ID")
+                        help="火山引擎 TTS 的 APP ID（覆盖环境变量 VOLCENGINE_APP_ID）。")
     parser.add_argument("--volcengine-access-key", default=None,
-                        help="火山引擎 TTS 的 Access Token（覆盖环境变量 VOLCENGINE_ACCESS_KEY）。"
-                             "获取方式: 火山引擎控制台 → 语音合成 → 应用管理 → Access Token")
+                        help="火山引擎 TTS 的 Access Token（覆盖环境变量 VOLCENGINE_ACCESS_KEY）。")
+    parser.add_argument("--elevenlabs-api-key", default=None,
+                        help="ElevenLabs API Key（覆盖环境变量 ELEVENLABS_API_KEY）。")
+    parser.add_argument("--use-s2s", action="store_true",
+                        help="启用 ElevenLabs Speech-to-Speech 变声模式（100% 继承原视频情绪语气与停顿）")
     parser.add_argument("--voice", default=None,
-                        help='AI 配音别名（如 xiaoxiao/yunjian/xiaoyi 等，--list-voices 查看全部）。'
-                             'edge 服务商见 VOICE_PRESETS（26个）；'
-                             'volcengine 服务商用 bd_ 前缀别名（如 bd_xiaoyan，共 24 个）。'
-                             '指定后自动启用配音，替换原音频。'
-                             '特殊值 "auto" = 根据笔记标签/标题关键词自动选配音')
+                        help='AI 配音别名（如 xiaoxiao/yunjian 或 el_rachel/el_domi 或 Voice ID，--list-voices 查看全部）。'
+                             '指定后自动启用配音，替换原音频。')
     parser.add_argument("--voice-text", default=None,
                         help='配音文本（默认用笔记标题+描述自动生成）')
     parser.add_argument("--voice-rate", default=None,

@@ -39,7 +39,7 @@ const LLM_PERSIST_KEYS = [
   "image_llm_fallback_provider", "image_llm_fallback_model", "image_llm_fallback_api_key",
   "ai_cover", "ai_cover_styles", "ai_cover_size", "image_mode",
   "tts_provider",
-  "volcengine_app_id", "volcengine_access_key",
+  "volcengine_app_id", "volcengine_access_key", "elevenlabs_api_key", "use_s2s",
 ];
 
 // 服务商字段映射：切换服务商时自动带出对应的 model / api_key / 额外字段
@@ -50,7 +50,7 @@ const PROVIDER_FIELDS = {
   image_llm_provider:  { scope: "image",  modelKey: "image_llm_model",  apiKeyKey: "image_llm_api_key" },
   image_llm_fallback_provider: { scope: "image_fallback", modelKey: "image_llm_fallback_model", apiKeyKey: "image_llm_fallback_api_key" },
   tts_provider:        { scope: "tts",    modelKey: null,               apiKeyKey: null,
-                         extra: { volcengine_app_id: "app_id", volcengine_access_key: "access_key" } },
+                         extra: { volcengine_app_id: "app_id", volcengine_access_key: "access_key", elevenlabs_api_key: "elevenlabs_key" } },
 };
 
 // 记录每个服务商字段上一次的值，用于检测切换
@@ -344,6 +344,9 @@ function applyDynamicChoices() {
         }
         if (State.voices.volcengine) {
           State.voices.volcengine.forEach(v => p.choices.push({ value: v.alias, label: `${v.alias} — ${v.desc}（火山）` }));
+        }
+        if (State.voices.elevenlabs) {
+          State.voices.elevenlabs.forEach(v => p.choices.push({ value: v.alias, label: `${v.alias} — ${v.desc}（ElevenLabs）` }));
         }
         // 加 auto 选项
         if (!p.choices.find(c => c.value === "auto")) {
@@ -1629,6 +1632,17 @@ function openAudition(currentVoice) {
     const group = document.createElement("optgroup");
     group.label = "火山引擎（需 API Key，不可试听）";
     State.voices.volcengine.forEach(v => {
+      const opt = document.createElement("option");
+      opt.value = v.alias;
+      opt.textContent = `${v.alias} — ${v.desc}`;
+      group.appendChild(opt);
+    });
+    el.auditionVoice.appendChild(group);
+  }
+  if (State.voices.elevenlabs && State.voices.elevenlabs.length > 0) {
+    const group = document.createElement("optgroup");
+    group.label = "ElevenLabs（超真实/S2S变声）";
+    State.voices.elevenlabs.forEach(v => {
       const opt = document.createElement("option");
       opt.value = v.alias;
       opt.textContent = `${v.alias} — ${v.desc}`;

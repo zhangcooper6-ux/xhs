@@ -302,18 +302,22 @@ SUBTITLE_STYLES = {
     },
 }
 
-# ---------- AI 配音参数（多服务商：edge-tts / 火山引擎 Seed-TTS）----------
-# 用 --voice <别名> 选择配音，--list-voices 查看全部配音（edge 26 个 + 火山引擎 24 个）
+# ---------- AI 配音参数（多服务商：edge-tts / 火山引擎 Seed-TTS / ElevenLabs）----------
+# 用 --voice <别名> 选择配音，--list-voices 查看全部配音（edge 26 个 + 火山引擎 24 个 + ElevenLabs 6 个）
 # 配音生成后会替换/混合到视频音轨
 TTS = {
     "enabled": False,               # 是否启用 AI 配音（默认关闭，用 --voice 开启）
-    "provider": "edge",             # TTS 服务商: edge(默认,免费) / volcengine(火山引擎Seed-TTS 2.0,需API key)
-    "voice": "xiaoxiao",            # 默认配音（晓晓，最热门）。完整列表见 core/tts.py VOICE_PRESETS
-                                    # 火山引擎用 bd_ 前缀别名，如 bd_xiaoyan（清新女声）
-    "rate": "+0%",                  # 语速：+10%加快 / -10%减慢 / +0%正常（火山引擎自动转换为整数）
-    "pitch": "+0Hz",               # 音调：+5Hz偏高 / -5Hz偏低 / +0Hz正常（火山引擎自动转换为整数）
-    "volume": "+0%",                # 音量：+20%变大 / -20%变小 / +0%正常（火山引擎自动转换为整数）
+    "provider": "edge",             # TTS 服务商: edge(默认,免费) / volcengine(火山引擎) / elevenlabs(ElevenLabs 超真实/S2S)
+    "voice": "xiaoxiao",            # 默认配音（晓晓，最热门）。完整列表见 core/tts.py
+                                    # 火山引擎用 bd_ 前缀别名；ElevenLabs 用 el_ 前缀别名或 Voice ID
+    "rate": "+0%",                  # 语速：+10%加快 / -10%减慢 / +0%正常
+    "pitch": "+0Hz",               # 音调：+5Hz偏高 / -5Hz偏低 / +0Hz正常
+    "volume": "+0%",                # 音量：+20%变大 / -20%变小 / +0%正常
     "clean_text": True,             # 清理文本（去#标签/emoji/URL，提升自然度）
+
+    # ElevenLabs 特有配置
+    "elevenlabs_api_key": os.getenv("ELEVENLABS_API_KEY", ""), # 可通过环境变量或 CLI 传入
+    "use_s2s": False,               # 是否启用 Speech-to-Speech 变声模式（100% 继承原视频情绪语气）
 
     # 音频合成策略
     "keep_bg_audio": False,         # True=保留原视频音频作为BGM（降音量混合）；False=完全替换

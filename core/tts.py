@@ -99,6 +99,37 @@ def _has_volcengine():
         return False
     return bool(os.getenv("VOLCENGINE_APP_ID") and os.getenv("VOLCENGINE_ACCESS_KEY"))
 
+# ===== ElevenLabs API 配置与常用音色预设 =====
+ELEVENLABS_TTS_API = "https://api.elevenlabs.io/v1/text-to-speech"
+ELEVENLABS_S2S_API = "https://api.elevenlabs.io/v1/speech-to-speech"
+
+ELEVENLABS_VOICES = {
+    "el_rachel": "21m00Tcm4TlvDq8ikWAM",   # Rachel（温暖自然女声，美妆/好物/生活）
+    "el_domi":   "AZnzlk1XvdvUeBnXmlld",   # Domi（强情绪女声，种草/爆款/解说）
+    "el_bella":  "EXAVITQu4vr4xnSDxMaL",   # Bella（亲切柔和女声，穿搭/日常）
+    "el_antoni": "ErXwobaYiN019PkySvjV",   # Antoni（干货知识男声，解说/科普）
+    "el_adam":   "pNInz6obpgDQGcFmaJgB",   # Adam（沉稳男声，情感/剧情）
+    "el_elli":   "MF3mGyEYCl7XYWbV9V6O",   # Elli（情感治愈女声，治愈/故事）
+}
+
+ELEVENLABS_VOICE_DESCRIPTIONS = {
+    "el_rachel": "Rachel（ElevenLabs·自然女声）温暖亲切，适合家居/美妆/好物",
+    "el_domi":   "Domi（ElevenLabs·强情绪女声）张力极强，适合短视频解说/爆款种草",
+    "el_bella":  "Bella（ElevenLabs·亲切女声）柔和甜美，适合穿搭/日常vlog",
+    "el_antoni": "Antoni（ElevenLabs·知识男声）清晰干练，适合科普/干货",
+    "el_adam":   "Adam（ElevenLabs·沉稳男声）磁性深沉，适合故事/情感",
+    "el_elli":   "Elli（ElevenLabs·治愈女声）情感丰富，适合情感/读书",
+}
+
+
+def _has_elevenlabs(api_key=None):
+    """检查 ElevenLabs 服务是否可用（依赖 requests + API Key）"""
+    if not _HAS_REQUESTS:
+        return False
+    key = api_key or os.getenv("ELEVENLABS_API_KEY")
+    return bool(key)
+
+
 
 # ===== 热门中文配音预设 =====
 # 每个 voice 对应 edge-tts 的 ShortName
@@ -277,6 +308,20 @@ def auto_voice(tags, title, desc="", provider="edge"):
     # edge 别名 → volcengine Seed-TTS 2.0 别名映射（按场景匹配）
     # 注意：2.0 不支持方言，方言场景回退到通用女声
     # 火山引擎音色需在控制台「语音合成」→「应用管理」→「音色管理」中开通
+    EDGE_TO_ELEVEN = {
+        "xiaoxiao":   "el_rachel",
+        "xiaoyi":     "el_bella",
+        "xiaomeng":   "el_elli",
+        "xiaoyan":    "el_rachel",
+        "yunjian":    "el_antoni",
+        "yunxi":      "el_adam",
+        "xiaohan":    "el_elli",
+        "xiaomo":     "el_antoni",
+        "xiaobei":    "el_domi",
+        "xiaoqiu":    "el_domi",
+        "xiaoxuan":   "el_bella",
+        "xiaozhen":   "el_domi",
+    }
     EDGE_TO_VOLC = {
         "xiaoxiao":   "bd_vivi",         # 生活家居 → Vivi 2.0（通用女声）
         "xiaoyi":     "bd_meilinvyou",   # 美妆穿搭 → 魅力女友（甜美）
@@ -295,7 +340,7 @@ def auto_voice(tags, title, desc="", provider="edge"):
         "xiaoshuang": "bd_xueayi",       # 亲子童话 → 儿童绘本
         "xiaorui":    "bd_cancan",       # 财经科技 → 知性灿灿
     }
-    default_alias = "bd_vivi" if provider == "volcengine" else "xiaoxiao"
+    default_alias = "el_rachel" if provider == "elevenlabs" else ("bd_vivi" if provider == "volcengine" else "xiaoxiao")
 
     # 拼接文本（标签去掉 # 前缀）
     tag_text = " ".join(t.lstrip("#") for t in (tags or []))
@@ -320,7 +365,10 @@ def auto_voice(tags, title, desc="", provider="edge"):
     scene = VOICE_DESCRIPTIONS.get(best_alias, best_alias)
 
     # 按 provider 转换别名
-    if provider == "volcengine":
+    if provider == "elevenlabs":
+        best_alias = EDGE_TO_ELEVEN.get(best_alias, "el_rachel")
+        scene = ELEVENLABS_VOICE_DESCRIPTIONS.get(best_alias, scene)
+    elif provider == "volcengine":
         best_alias = EDGE_TO_VOLC.get(best_alias, "bd_vivi")
         scene = VOLCENGINE_VOICE_DESCRIPTIONS.get(best_alias, scene)
 
@@ -333,8 +381,12 @@ def list_voices(provider="edge"):
     """列出所有可用配音。返回 [(alias, voice_name, description), ...]
 
     参数:
-        provider: "edge"（edge-tts 26 个）或 "volcengine"（火山引擎 Seed-TTS 2.0）
+        provider: "edge" / "volcengine" / "elevenlabs"
     """
+    if provider == "elevenlabs":
+        return [(alias, ELEVENLABS_VOICES[alias],
+                 ELEVENLABS_VOICE_DESCRIPTIONS.get(alias, alias))
+                for alias in ELEVENLABS_VOICES]
     if provider == "volcengine":
         return [(alias, VOLCENGINE_VOICES[alias],
                  VOLCENGINE_VOICE_DESCRIPTIONS.get(alias, alias))
@@ -345,7 +397,7 @@ def list_voices(provider="edge"):
 
 def list_all_voices():
     """列出所有服务商的所有配音（合并 edge + volcengine）。"""
-    return list_voices("edge") + list_voices("volcengine")
+    return list_voices("edge") + list_voices("volcengine") + list_voices("elevenlabs")
 
 
 def print_voices():
@@ -449,18 +501,37 @@ def print_voices():
 
 
 def resolve_voice(voice_input, provider="edge"):
-    """解析用户输入的 voice（别名或完整 ShortName / voice_type）。
+    """解析用户输入的 voice（别名或完整 ShortName / voice_type / Voice ID）。
 
     参数:
         voice_input: 用户输入的配音别名或 ID
-        provider: "edge" 或 "volcengine"
+        provider: "edge" / "volcengine" / "elevenlabs"
     返回:
         edge: ShortName（如 "zh-CN-XiaoxiaoNeural"）
         volcengine: voice_type（如 "zh_female_vv_uranus_bigtts"）
+        elevenlabs: Voice ID（如 "21m00Tcm4TlvDq8ikWAM"）
     """
+    if provider == "elevenlabs":
+        return _resolve_elevenlabs_voice(voice_input)
     if provider == "volcengine":
         return _resolve_volcengine_voice(voice_input)
     return _resolve_edge_voice(voice_input)
+
+
+def _resolve_elevenlabs_voice(voice_input):
+    """解析 ElevenLabs 的 Voice ID。"""
+    default_voice = ELEVENLABS_VOICES["el_rachel"]
+    if not voice_input:
+        return default_voice
+    if voice_input in ELEVENLABS_VOICES:
+        return ELEVENLABS_VOICES[voice_input]
+    if len(voice_input) >= 15 or not voice_input.startswith("el_"):
+        return voice_input
+    for alias, vid in ELEVENLABS_VOICES.items():
+        if voice_input.lower() in alias.lower():
+            return vid
+    logger.warning("未找到 ElevenLabs 音色 '%s'，使用默认 Rachel", voice_input)
+    return default_voice
 
 
 def _resolve_edge_voice(voice_input):
@@ -562,7 +633,7 @@ def clean_text_for_tts(text):
 
 
 def generate_tts(text, out_path, voice="xiaoxiao", rate="+0%", pitch="+0Hz",
-                 volume="+0%", clean=True, provider="edge"):
+                 volume="+0%", clean=True, provider="edge", api_key=None):
     """生成配音音频（支持多服务商）。
 
     参数:
@@ -577,6 +648,8 @@ def generate_tts(text, out_path, voice="xiaoxiao", rate="+0%", pitch="+0Hz",
     返回:
         out_path（成功）或 None（失败）
     """
+    if provider == "elevenlabs":
+        return _generate_elevenlabs_tts(text, out_path, voice, rate, pitch, volume, clean, api_key=api_key)
     if provider == "volcengine":
         return _generate_volcengine_tts(text, out_path, voice, rate, pitch, volume, clean)
     return _generate_edge_tts(text, out_path, voice, rate, pitch, volume, clean)
@@ -616,6 +689,120 @@ def _generate_edge_tts(text, out_path, voice, rate, pitch, volume, clean):
         return None
     except Exception as e:
         logger.error("配音生成异常: %s", e)
+        return None
+
+
+
+
+def _generate_elevenlabs_tts(text, out_path, voice, rate="+0%", pitch="+0Hz",
+                            volume="+0%", clean=True, model_id=None, api_key=None):
+    """用 ElevenLabs API 生成超高质量配音音频。"""
+    if not _HAS_REQUESTS:
+        logger.error("requests 未安装，ElevenLabs 需要: pip install requests")
+        return None
+    api_key = api_key or os.getenv("ELEVENLABS_API_KEY")
+    if not api_key:
+        logger.error("ElevenLabs 未配置 API Key！请设置环境变量 ELEVENLABS_API_KEY 或 --elevenlabs-api-key")
+        return None
+    if not text or not text.strip():
+        logger.warning("配音文本为空，跳过 TTS")
+        return None
+
+    if clean:
+        text = clean_text_for_tts(text)
+    if not text.strip():
+        logger.warning("清理后文本为空，跳过 TTS")
+        return None
+
+    voice_id = _resolve_elevenlabs_voice(voice)
+    model_id = model_id or os.getenv("ELEVENLABS_MODEL_ID", "eleven_flash_v2_5")
+
+    url = f"{ELEVENLABS_TTS_API}/{voice_id}"
+    headers = {
+        "xi-api-key": api_key,
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "text": text,
+        "model_id": model_id,
+        "voice_settings": {
+            "stability": 0.5,
+            "similarity_boost": 0.75,
+            "style": 0.2,
+            "use_speaker_boost": True
+        }
+    }
+
+    logger.info("[ElevenLabs] 生成超真实配音: voice=%s (%s), model=%s", voice, voice_id, model_id)
+    try:
+        r = requests.post(url, json=payload, headers=headers, timeout=60)
+        if r.status_code == 200:
+            with open(out_path, "wb") as f:
+                f.write(r.content)
+            if os.path.exists(out_path) and os.path.getsize(out_path) > 0:
+                logger.info("ElevenLabs 配音生成完成: %s (%d bytes)", out_path, os.path.getsize(out_path))
+                return out_path
+        else:
+            logger.error("ElevenLabs TTS 请求失败 (%d): %s", r.status_code, r.text)
+            return None
+    except Exception as e:
+        logger.error("ElevenLabs TTS 异常: %s", e)
+        return None
+
+
+def speech_to_speech_elevenlabs(input_audio_path, out_path, voice="el_rachel",
+                                model_id="eleven_multilingual_sts_v2", api_key=None):
+    """ElevenLabs Speech-to-Speech (S2S) 音频变声二创。
+
+    完全继承原视频中说话人的情感起伏、语速节奏、语气助词与笑声停顿，
+    并替换为目标音色（如 Rachel, Domi 或自定义 Voice ID）。
+    """
+    if not _HAS_REQUESTS:
+        logger.error("requests 未安装，ElevenLabs S2S 需要: pip install requests")
+        return None
+    api_key = api_key or os.getenv("ELEVENLABS_API_KEY")
+    if not api_key:
+        logger.error("ElevenLabs 未配置 API Key！无法执行 S2S 变声")
+        return None
+    if not os.path.exists(input_audio_path):
+        logger.error("S2S 输入音频不存在: %s", input_audio_path)
+        return None
+
+    voice_id = _resolve_elevenlabs_voice(voice)
+    url = f"{ELEVENLABS_S2S_API}/{voice_id}"
+    headers = {
+        "xi-api-key": api_key,
+    }
+
+    voice_settings = json.dumps({
+        "stability": 0.45,
+        "similarity_boost": 0.8,
+        "style": 0.3,
+        "use_speaker_boost": True
+    })
+
+    data = {
+        "model_id": model_id,
+        "voice_settings": voice_settings
+    }
+
+    logger.info("[ElevenLabs S2S] 启动 Speech-to-Speech 变声: voice=%s (%s), model=%s", voice, voice_id, model_id)
+    try:
+        with open(input_audio_path, "rb") as audio_f:
+            files = {"audio": (os.path.basename(input_audio_path), audio_f, "audio/mpeg")}
+            r = requests.post(url, headers=headers, data=data, files=files, timeout=120)
+
+        if r.status_code == 200:
+            with open(out_path, "wb") as f:
+                f.write(r.content)
+            if os.path.exists(out_path) and os.path.getsize(out_path) > 0:
+                logger.info("ElevenLabs S2S 变声完成: %s (%d bytes)", out_path, os.path.getsize(out_path))
+                return out_path
+        else:
+            logger.error("ElevenLabs S2S 请求失败 (%d): %s", r.status_code, r.text)
+            return None
+    except Exception as e:
+        logger.error("ElevenLabs S2S 异常: %s", e)
         return None
 
 
@@ -1498,7 +1685,7 @@ def apply_voiceover(video_path, text, out_path, voice="xiaoxiao",
                     rate="+0%", pitch="+0Hz", volume="+0%",
                     keep_bg_audio=False, bg_volume=0.15,
                     fit_duration=True, tmp_dir=None, provider="edge",
-                    condenser=None):
+                    condenser=None, use_s2s=False, elevenlabs_api_key=None):
     """完整配音流程：生成配音 → 调整时长 → 替换/混合视频音频。
 
     参数:
@@ -1519,7 +1706,15 @@ def apply_voiceover(video_path, text, out_path, voice="xiaoxiao",
         out_path（成功）或 None（失败）
     """
     # 服务商可用性检查
-    if provider == "volcengine":
+    if provider == "elevenlabs":
+        if not _HAS_REQUESTS:
+            logger.error("requests 未安装，ElevenLabs 需要: pip install requests")
+            return None
+        key = elevenlabs_api_key or os.getenv("ELEVENLABS_API_KEY")
+        if not key:
+            logger.error("ElevenLabs 未配置 API Key！请设置环境变量 ELEVENLABS_API_KEY 或 --elevenlabs-api-key")
+            return None
+    elif provider == "volcengine":
         if not _HAS_REQUESTS:
             logger.error("requests 未安装，火山引擎 TTS 需要: pip install requests")
             return None
@@ -1538,11 +1733,28 @@ def apply_voiceover(video_path, text, out_path, voice="xiaoxiao",
     _tmp = tmp_dir or tempfile.gettempdir()
     os.makedirs(_tmp, exist_ok=True)
 
-    # 1. 生成配音
+    # 1. 生成配音 (支持 S2S 变声 或 标准 TTS)
     tts_path = os.path.join(_tmp, "voiceover_raw.mp3")
-    if not generate_tts(text, tts_path, voice, rate, pitch, volume,
-                        clean=True, provider=provider):
-        return None
+    s2s_done = False
+    if use_s2s or (provider == "elevenlabs" and use_s2s):
+        raw_audio_path = os.path.join(_tmp, "video_audio_extracted.mp3")
+        from . import dedup_video
+        ffmpeg = dedup_video._get_ffmpeg()
+        cmd = [ffmpeg, "-y", "-i", video_path, "-vn", "-acodec", "libmp3lame", "-q:a", "2", raw_audio_path]
+        try:
+            res = subprocess.run(cmd, capture_output=True, timeout=60)
+            if res.returncode == 0 and os.path.exists(raw_audio_path) and os.path.getsize(raw_audio_path) > 0:
+                s2s_res = speech_to_speech_elevenlabs(raw_audio_path, tts_path, voice=voice, api_key=elevenlabs_api_key)
+                if s2s_res:
+                    s2s_done = True
+                    logger.info("Speech-to-Speech 变声成功！完全保留原视频的情感与语气起伏！")
+        except Exception as e:
+            logger.warning("提取视频原声音频进行 S2S 变声异常: %s", e)
+
+    if not s2s_done:
+        if not generate_tts(text, tts_path, voice, rate, pitch, volume,
+                            clean=True, provider=provider, api_key=elevenlabs_api_key):
+            return None
 
     # 1.5 去除 TTS 尾部静音/杂音：探测语音实际结束点，截断尾部
     # 火山引擎/edge-tts 生成的 MP3 尾部常有编码残留/低电平杂音，
