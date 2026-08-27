@@ -235,15 +235,12 @@ def _build_creative_layers(cur_label, fc_parts, extra_inputs, target_w, target_h
             txt_escaped = _esc_path(txt_file)
             font_escaped = _esc_path(font)
 
-            bar_label = f"{cur_label}_hookbar"
             hook_label = "hook_out"
             fc_parts.append(
-                f"[{cur_label}]drawbox=x=int((iw-tw)/2)-24:y={bar_y}:w=tw+48:h={bar_h}:"
-                f"color={bg_col}:t=fill[{bar_label}]")
-            fc_parts.append(
-                f"[{bar_label}]drawtext=fontfile='{font_escaped}':"
+                f"[{cur_label}]drawtext=fontfile='{font_escaped}':"
                 f"textfile='{txt_escaped}':fontsize={fontsize}:"
-                f"fontcolor={text_col}:x=(w-tw)/2:y={text_y}[{hook_label}]")
+                f"fontcolor={text_col}:box=1:boxcolor={bg_col}:boxborderw=18:"
+                f"x=(w-tw)/2:y={text_y}[{hook_label}]")
             cur_label = hook_label
             logger.info("添加前3秒黄金 Hook 标题卡: %s", caption_text[:20])
 
