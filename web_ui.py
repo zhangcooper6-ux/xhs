@@ -855,7 +855,11 @@ def _run_task(cmd):
 # ========== 路由 ==========
 @app.route("/")
 def index():
-    return send_from_directory(WEB_DIR, "index.html")
+    resp = make_response(send_from_directory(WEB_DIR, "index.html"))
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
 
 
 @app.route("/<path:filename>")
@@ -864,7 +868,11 @@ def static_files(filename):
     safe = os.path.normpath(os.path.join(WEB_DIR, filename))
     if not safe.startswith(WEB_DIR):
         abort(404)
-    return send_from_directory(WEB_DIR, filename)
+    resp = make_response(send_from_directory(WEB_DIR, filename))
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
 
 
 @app.route("/api/params")
