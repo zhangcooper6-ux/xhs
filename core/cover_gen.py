@@ -953,6 +953,391 @@ def render_list_banner_style(base_path: str, title: str, out_path: str, video_pa
     return out_path
 
 
+
+
+def render_split_comparison_style(base_path: str, title: str, out_path: str, video_path: str = None) -> str:
+    """模板 7：50:50 左右双图 PK 强对比风（前后对比/避坑vs推荐/真假对比）。
+
+    特点：左右 50:50 分屏切片 + 中央悬浮 VS 勋章 + 上下超大高亮卡片标题。
+    """
+    from PIL import Image, ImageDraw, ImageFont, ImageFilter
+
+    info = _parse_title_for_cover(title)
+    photos = _collect_4_photos(base_path, video_path)
+
+    bg = Image.new("RGB", (COVER_W, COVER_H), (255, 255, 255))
+    half_w = (COVER_W - 6) // 2
+
+    # 左右两图拼贴
+    img_left = _fit_crop_image(photos[0], half_w, COVER_H)
+    img_right = _fit_crop_image(photos[1], half_w, COVER_H)
+
+    bg.paste(img_left, (0, 0))
+    bg.paste(img_right, (half_w + 6, 0))
+
+    # 1. 顶端对比标志/警告胶囊
+    top_font = ImageFont.truetype(_find_font(36, bold=True), 36)
+    _draw_large_card(
+        bg, (50, 60), f"⚠️ {info['tag']} | 真实对比", top_font,
+        bg_color=(220, 38, 38, 245), text_color=(255, 255, 255),
+        pad_x=24, pad_y=12, radius=20, shadow_blur=10, shadow_alpha=70
+    )
+
+    # 2. 中间大字强观点标题（占据 >1/3 面积）
+    font_main = ImageFont.truetype(_find_font(94, bold=True), 94)
+    start_y = 250
+
+    w1, h1 = _draw_large_card(
+        bg, (50, start_y), info["line1"], font_main,
+        bg_color=(255, 230, 0, 255), text_color=(18, 18, 20),
+        pad_x=40, pad_y=24, radius=24, shadow_blur=18, shadow_alpha=120
+    )
+
+    next_y = start_y + h1 + 18
+    if info["line2"]:
+        _draw_large_card(
+            bg, (50, next_y), info["line2"], font_main,
+            bg_color=(18, 18, 24, 250), text_color=(255, 255, 255),
+            pad_x=40, pad_y=24, radius=24, shadow_blur=18, shadow_alpha=120
+        )
+
+    # 3. 画面中央红黑悬浮 VS 勋章
+    vs_size = 130
+    vs_x = (COVER_W - vs_size) // 2
+    vs_y = (COVER_H - vs_size) // 2 + 180
+
+    vs_img = Image.new("RGBA", (vs_size, vs_size), (0, 0, 0, 0))
+    vd = ImageDraw.Draw(vs_img)
+    vd.ellipse([(0, 0), (vs_size, vs_size)], fill=(255, 36, 66, 250), outline=(255, 255, 255), width=4)
+    vs_font = ImageFont.truetype(_find_font(52, bold=True), 52)
+    bbox = vd.textbbox((0, 0), "VS", font=vs_font)
+    vw = bbox[2] - bbox[0]
+    vh = bbox[3] - bbox[1]
+    vd.text(((vs_size - vw) // 2, (vs_size - vh) // 2 - bbox[1]), "VS", font=vs_font, fill=(255, 255, 255))
+
+    bg.paste(vs_img, (vs_x, vs_y), vs_img)
+
+    bg.save(out_path, quality=98, subsampling=0)
+    logger.info("模板7(50:50对比): %s", out_path)
+    return out_path
+
+
+def render_frosted_glass_style(base_path: str, title: str, out_path: str, video_path: str = None) -> str:
+    """模板 8：高级感 iOS 悬浮毛玻璃卡片风（高级感/美妆/数码/好物/简约）。
+
+    特点：全画幅超清图 + 中央真实高斯模糊 iOS 毛玻璃微透浮雕卡片 + 优雅精致排版。
+    """
+    from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
+
+    info = _parse_title_for_cover(title)
+    if base_path and os.path.exists(base_path):
+        bg = _fit_crop_image(Image.open(base_path).convert("RGB"), COVER_W, COVER_H)
+    else:
+        photos = _collect_4_photos(base_path, video_path)
+        bg = _create_4grid_canvas(photos)
+
+    # 卡片尺寸与位置
+    card_w = COVER_W - 140  # 940
+    card_h = 360
+    card_x = 70
+    card_y = (COVER_H - card_h) // 2 - 20
+
+    # 1. 截取卡片对应区域底图并做高斯模糊（模拟真实毛玻璃效果）
+    card_crop = bg.crop((card_x, card_y, card_x + card_w, card_y + card_h))
+    card_blur = card_crop.filter(ImageFilter.GaussianBlur(radius=16))
+    card_blur = ImageEnhance.Brightness(card_blur).enhance(1.18)
+
+    # 2. 混合半透明白色蒙版（RGBA）
+    white_overlay = Image.new("RGBA", card_blur.size, (255, 255, 255, 180))
+    frosted = Image.alpha_composite(card_blur.convert("RGBA"), white_overlay)
+
+    # 3. 绘制圆角与 2px 极细半透明白色边框
+    mask = Image.new("L", (card_w, card_h), 0)
+    mdraw = ImageDraw.Draw(mask)
+    mdraw.rounded_rectangle([(0, 0), (card_w, card_h)], radius=28, fill=255)
+
+    f_draw = ImageDraw.Draw(frosted)
+    f_draw.rounded_rectangle([(1, 1), (card_w - 2, card_h - 2)], radius=28, outline=(255, 255, 255, 220), width=2)
+
+    # 4. 阴影贴图
+    shadow = Image.new("RGBA", bg.size, (0, 0, 0, 0))
+    s_draw = ImageDraw.Draw(shadow)
+    s_draw.rounded_rectangle([(card_x, card_y + 8), (card_x + card_w, card_y + card_h + 8)], radius=28, fill=(0, 0, 0, 80))
+    shadow = shadow.filter(ImageFilter.GaussianBlur(radius=18))
+    bg.paste(shadow, (0, 0), shadow)
+
+    # 贴回毛玻璃卡片
+    bg.paste(frosted.convert("RGB"), (card_x, card_y), mask)
+
+    # 5. 精致排版文字
+    d = ImageDraw.Draw(bg)
+    tag_font = ImageFont.truetype(_find_font(32, bold=True), 32)
+    tag_text = f"✦ D A I L Y · {info['tag']} ✦"
+    bbox = d.textbbox((0, 0), tag_text, font=tag_font)
+    d.text(((COVER_W - (bbox[2] - bbox[0])) // 2, card_y + 36), tag_text, font=tag_font, fill=(210, 40, 60))
+
+    font_main = ImageFont.truetype(_find_font(76, bold=True), 76)
+    full_t = f"{info['line1']} {info['line2']}" if info['line2'] else info['line1']
+    bbox = d.textbbox((0, 0), full_t, font=font_main)
+    d.text(((COVER_W - (bbox[2] - bbox[0])) // 2, card_y + 105), full_t, font=font_main, fill=(20, 20, 24))
+
+    sub_font = ImageFont.truetype(_find_font(34, bold=False), 34)
+    sub_t = f"— {info['sub']} —"
+    bbox = d.textbbox((0, 0), sub_t, font=sub_font)
+    d.text(((COVER_W - (bbox[2] - bbox[0])) // 2, card_y + 240), sub_t, font=sub_font, fill=(100, 100, 110))
+
+    bg.save(out_path, quality=98, subsampling=0)
+    logger.info("模板8(毛玻璃): %s", out_path)
+    return out_path
+
+
+def render_grid_mosaic_style(base_path: str, title: str, out_path: str, video_path: str = None) -> str:
+    """模板 9：3×3 极致九宫格大容量合集风（九宫格平铺/海量合集/强迫症必看）。
+
+    特点：3×3 九宫格平铺 + 5号核心中位格替换为黑金/红黄高亮卡片。
+    """
+    from PIL import Image, ImageDraw, ImageFont
+
+    info = _parse_title_for_cover(title)
+    photos = _collect_4_photos(base_path, video_path)
+
+    # 衍生 9 张图片切片
+    nine_photos = []
+    while len(nine_photos) < 9:
+        nine_photos.extend(photos)
+    nine_photos = nine_photos[:9]
+
+    gutter = 6
+    cell_w = (COVER_W - gutter * 2) // 3  # 354
+    cell_h = (COVER_H - gutter * 2) // 3  # 474
+
+    bg = Image.new("RGB", (COVER_W, COVER_H), (255, 255, 255))
+
+    for idx in range(9):
+        row = idx // 3
+        col = idx % 3
+        cx = col * (cell_w + gutter)
+        cy = row * (cell_h + gutter)
+
+        if idx == 4:
+            # 5号中央主格：替换为纯黑高亮底块
+            card_img = Image.new("RGB", (cell_w, cell_h), (18, 18, 22))
+            cd = ImageDraw.Draw(card_img)
+            # 边框装饰
+            cd.rectangle([(8, 8), (cell_w - 8, cell_h - 8)], outline=(255, 230, 0), width=3)
+
+            font_tag = ImageFont.truetype(_find_font(32, bold=True), 32)
+            font_title = ImageFont.truetype(_find_font(60, bold=True), 60)
+
+            cd.text((24, 40), f"📌 {info['tag']}", font=font_tag, fill=(255, 230, 0))
+
+            # 主文字居中
+            bbox1 = cd.textbbox((0, 0), info["line1"], font=font_title)
+            cd.text(((cell_w - (bbox1[2] - bbox1[0])) // 2, 130), info["line1"], font=font_title, fill=(255, 255, 255))
+
+            if info["line2"]:
+                bbox2 = cd.textbbox((0, 0), info["line2"], font=font_title)
+                cd.text(((cell_w - (bbox2[2] - bbox2[0])) // 2, 220), info["line2"], font=font_title, fill=(255, 230, 0))
+
+            font_sub = ImageFont.truetype(_find_font(26, bold=False), 26)
+            cd.text((24, cell_h - 60), "✦ 避坑清单 ✦", font=font_sub, fill=(200, 200, 210))
+
+            bg.paste(card_img, (cx, cy))
+        else:
+            p = _fit_crop_image(nine_photos[idx], cell_w, cell_h)
+            bg.paste(p, (cx, cy))
+
+    # 顶部分线标
+    top_font = ImageFont.truetype(_find_font(36, bold=True), 36)
+    _draw_large_card(
+        bg, (40, 40), f"🔥 海量合集 | {info['tag']}", top_font,
+        bg_color=(255, 36, 66, 245), text_color=(255, 255, 255),
+        pad_x=22, pad_y=10, radius=18, shadow_blur=10, shadow_alpha=70
+    )
+
+    bg.save(out_path, quality=98, subsampling=0)
+    logger.info("模板9(九宫格): %s", out_path)
+    return out_path
+
+
+def render_polaroid_stack_style(base_path: str, title: str, out_path: str, video_path: str = None) -> str:
+    """模板 10：复古拍立得胶片手写风（拍立得相框/随手拍/博主自用/复古）。
+
+    特点：燕麦质感背景 + 拍立得相框 + 底部留白手写体 + 顶部标签。
+    """
+    from PIL import Image, ImageDraw, ImageFont, ImageFilter
+
+    info = _parse_title_for_cover(title)
+    photos = _collect_4_photos(base_path, video_path)
+
+    # 燕麦色暖质感背景
+    bg = Image.new("RGB", (COVER_W, COVER_H), (244, 240, 234))
+
+    # 拍立得白框尺寸
+    frame_w = 900
+    frame_h = 1060
+    fx = (COVER_W - frame_w) // 2
+    fy = 220
+
+    # 1. 拍立得卡片高斯阴影
+    shadow = Image.new("RGBA", bg.size, (0, 0, 0, 0))
+    sd = ImageDraw.Draw(shadow)
+    sd.rounded_rectangle([(fx, fy + 8), (fx + frame_w, fy + frame_h + 8)], radius=18, fill=(0, 0, 0, 60))
+    shadow = shadow.filter(ImageFilter.GaussianBlur(radius=16))
+    bg.paste(shadow, (0, 0), shadow)
+
+    # 2. 拍立得白框主体
+    polaroid = Image.new("RGB", (frame_w, frame_h), (255, 255, 255))
+    pd = ImageDraw.Draw(polaroid)
+
+    # 拍立得内嵌照片 (上方)
+    photo_w = 830
+    photo_h = 750
+    photo_x = (frame_w - photo_w) // 2
+    photo_y = 35
+
+    photo_img = _fit_crop_image(photos[0], photo_w, photo_h)
+    polaroid.paste(photo_img, (photo_x, photo_y))
+
+    # 拍立得下方留白文字区域
+    font_main = ImageFont.truetype(_find_font(68, bold=True), 68)
+    full_t = f"{info['line1']} {info['line2']}" if info['line2'] else info['line1']
+    bbox = pd.textbbox((0, 0), full_t, font=font_main)
+    pd.text(((frame_w - (bbox[2] - bbox[0])) // 2, photo_y + photo_h + 40), full_t, font=font_main, fill=(28, 28, 32))
+
+    font_sub = ImageFont.truetype(_find_font(32, bold=False), 32)
+    sub_t = f"DATE: 2025.08 · {info['sub']}"
+    pd.text((photo_x, frame_h - 70), sub_t, font=font_sub, fill=(130, 130, 140))
+
+    bg.paste(polaroid, (fx, fy))
+
+    # 3. 顶部爆款标签
+    top_font = ImageFont.truetype(_find_font(36, bold=True), 36)
+    _draw_large_card(
+        bg, (50, 70), f"🔥 自用实拍 | {info['tag']}", top_font,
+        bg_color=(255, 36, 66, 245), text_color=(255, 255, 255),
+        pad_x=24, pad_y=12, radius=20, shadow_blur=10, shadow_alpha=70
+    )
+
+    bg.save(out_path, quality=98, subsampling=0)
+    logger.info("模板10(拍立得): %s", out_path)
+    return out_path
+
+
+def render_minimal_banner_style(base_path: str, title: str, out_path: str, video_path: str = None) -> str:
+    """模板 11：电影级上下遮幅黑金大片风（极简/大气/电影感/零遮挡）。
+
+    特点：上下 18% 电影黑色遮幅 + 烫金细线 + 纯白大字标题。
+    """
+    from PIL import Image, ImageDraw, ImageFont
+
+    info = _parse_title_for_cover(title)
+    if base_path and os.path.exists(base_path):
+        bg = _fit_crop_image(Image.open(base_path).convert("RGB"), COVER_W, COVER_H)
+    else:
+        photos = _collect_4_photos(base_path, video_path)
+        bg = _create_4grid_canvas(photos)
+
+    d = ImageDraw.Draw(bg, "RGBA")
+    bar_h = 240
+
+    # 1. 顶部遮幅
+    d.rectangle([(0, 0), (COVER_W, bar_h)], fill=(15, 15, 18, 245))
+    # 2. 底部遮幅
+    d.rectangle([(0, COVER_H - bar_h), (COVER_W, COVER_H)], fill=(15, 15, 18, 245))
+
+    # 3. 顶部烫金装饰线与标签
+    d.line([(80, 50), (COVER_W - 80, 50)], fill=(255, 215, 130, 180), width=2)
+    top_font = ImageFont.truetype(_find_font(32, bold=True), 32)
+    top_t = f"— CINEMATIC REPORT · {info['tag']} —"
+    bbox = d.textbbox((0, 0), top_t, font=top_font)
+    d.text(((COVER_W - (bbox[2] - bbox[0])) // 2, 80), top_t, font=top_font, fill=(255, 215, 130))
+
+    # 4. 底部超大醒目标题
+    font_main = ImageFont.truetype(_find_font(84, bold=True), 84)
+    full_t = f"{info['line1']} {info['line2']}" if info['line2'] else info['line1']
+    bbox = d.textbbox((0, 0), full_t, font=font_main)
+    d.text(((COVER_W - (bbox[2] - bbox[0])) // 2, COVER_H - bar_h + 35), full_t, font=font_main, fill=(255, 255, 255))
+
+    sub_font = ImageFont.truetype(_find_font(32, bold=False), 32)
+    sub_t = f"✦ {info['sub']} ✦"
+    bbox = d.textbbox((0, 0), sub_t, font=sub_font)
+    d.text(((COVER_W - (bbox[2] - bbox[0])) // 2, COVER_H - 75), sub_t, font=sub_font, fill=(200, 200, 210))
+
+    bg.save(out_path, quality=98, subsampling=0)
+    logger.info("模板11(电影遮幅): %s", out_path)
+    return out_path
+
+
+def render_bold_highlight_style(base_path: str, title: str, out_path: str, video_path: str = None) -> str:
+    """模板 12：荧光高亮马克笔划线强调风（重点强调/干货/划线笔刷/学生党）。
+
+    特点：全画幅超清实拍 + 荧光笔刷高亮划线底层 + 左侧黑圈角标。
+    """
+    from PIL import Image, ImageDraw, ImageFont
+
+    info = _parse_title_for_cover(title)
+    if base_path and os.path.exists(base_path):
+        bg = _fit_crop_image(Image.open(base_path).convert("RGB"), COVER_W, COVER_H)
+    else:
+        photos = _collect_4_photos(base_path, video_path)
+        bg = _create_4grid_canvas(photos)
+
+    # 1. 顶部 Tag
+    tag_font = ImageFont.truetype(_find_font(36, bold=True), 36)
+    _draw_large_card(
+        bg, (50, 70), f"📌 划重点 | {info['tag']}", tag_font,
+        bg_color=(20, 20, 24, 240), text_color=(255, 230, 0),
+        pad_x=24, pad_y=12, radius=20, shadow_blur=10, shadow_alpha=70
+    )
+
+    # 2. 荧光笔高亮划线大字 (Y=260 起)
+    font_main = ImageFont.truetype(_find_font(96, bold=True), 96)
+    d_temp = ImageDraw.Draw(bg)
+
+    start_y = 260
+    # Line 1 (荧光笔粉色 stroke)
+    bbox1 = d_temp.textbbox((0, 0), info["line1"], font=font_main)
+    w1 = bbox1[2] - bbox1[0]
+    h1 = bbox1[3] - bbox1[1]
+
+    # 绘制高亮划线块
+    hl1 = Image.new("RGBA", bg.size, (0, 0, 0, 0))
+    hd1 = ImageDraw.Draw(hl1)
+    hd1.rounded_rectangle([(45, start_y), (45 + w1 + 60, start_y + h1 + 36)], radius=16, fill=(255, 51, 102, 240))
+    bg.paste(hl1, (0, 0), hl1)
+
+    d = ImageDraw.Draw(bg)
+    d.text((75 - bbox1[0], start_y + 18 - bbox1[1]), info["line1"], font=font_main, fill=(255, 255, 255))
+
+    next_y = start_y + h1 + 54
+    if info["line2"]:
+        bbox2 = d_temp.textbbox((0, 0), info["line2"], font=font_main)
+        w2 = bbox2[2] - bbox2[0]
+        h2 = bbox2[3] - bbox2[1]
+
+        hl2 = Image.new("RGBA", bg.size, (0, 0, 0, 0))
+        hd2 = ImageDraw.Draw(hl2)
+        hd2.rounded_rectangle([(45, next_y), (45 + w2 + 60, next_y + h2 + 36)], radius=16, fill=(255, 230, 0, 245))
+        bg.paste(hl2, (0, 0), hl2)
+
+        d = ImageDraw.Draw(bg)
+        d.text((75 - bbox2[0], next_y + 18 - bbox2[1]), info["line2"], font=font_main, fill=(18, 18, 20))
+        next_y += h2 + 54
+
+    # 3. 底部金句
+    sub_font = ImageFont.truetype(_find_font(36, bold=True), 36)
+    _draw_large_card(
+        bg, (50, next_y), f"✦ {info['sub']} ✦", sub_font,
+        bg_color=(0, 0, 0, 170), text_color=(255, 255, 255),
+        pad_x=22, pad_y=10, radius=18, shadow_blur=8, shadow_alpha=60
+    )
+
+    bg.save(out_path, quality=98, subsampling=0)
+    logger.info("模板12(马克笔高亮): %s", out_path)
+    return out_path
+
+
 # ---------- 主入口：生成所有风格的封面 ----------
 
 def generate_covers(title: str, cover_url: str = None, video_path: str = None,
@@ -1004,7 +1389,7 @@ def generate_covers(title: str, cover_url: str = None, video_path: str = None,
     os.makedirs(out_dir, exist_ok=True)
 
     if styles is None:
-        styles = ["bigtext", "bottombar", "topbar", "magazine", "vlog_card", "list_banner"]
+        styles = ["bigtext", "bottombar", "topbar", "magazine", "vlog_card", "list_banner", "split_comparison", "frosted_glass", "grid_mosaic", "polaroid_stack", "minimal_banner", "bold_highlight"]
 
     # === LLM 生成封面标题（如启用） ===
     title_source = "user"  # 用户指定或二创 Top1
@@ -1096,6 +1481,18 @@ def generate_covers(title: str, cover_url: str = None, video_path: str = None,
                 render_vlog_card_style(base_for_render, title, out_path, video_path=video_path)
             elif style == "list_banner":
                 render_list_banner_style(base_for_render, title, out_path, video_path=video_path)
+            elif style == "split_comparison":
+                render_split_comparison_style(base_for_render, title, out_path, video_path=video_path)
+            elif style == "frosted_glass":
+                render_frosted_glass_style(base_for_render, title, out_path, video_path=video_path)
+            elif style == "grid_mosaic":
+                render_grid_mosaic_style(base_for_render, title, out_path, video_path=video_path)
+            elif style == "polaroid_stack":
+                render_polaroid_stack_style(base_for_render, title, out_path, video_path=video_path)
+            elif style == "minimal_banner":
+                render_minimal_banner_style(base_for_render, title, out_path, video_path=video_path)
+            elif style == "bold_highlight":
+                render_bold_highlight_style(base_for_render, title, out_path, video_path=video_path)
             else:
                 logger.warning("未知封面风格: %s", style)
                 continue

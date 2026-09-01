@@ -799,13 +799,12 @@ def main(argv=None):
                         help="列出合法免版税音乐来源（Pixabay/Bensound/FMA 等）")
     # 封面生成 + 文案二创
     parser.add_argument("--no-cover", action="store_true",
-                        help="不生成封面（默认生成 6 种爆款风格封面 + 保留原封面）")
+                        help="不生成封面（默认生成全量 12 种小红书爆款视觉设计封面 + 保留原封面）")
     parser.add_argument("--no-copywrite", action="store_true",
                         help="不生成二创文案（默认生成爆款标题候选 + 正文 + 标签）")
     parser.add_argument("--cover-styles", default=None,
-                        help="封面风格（逗号分隔）: bigtext(四宫格干货合集) / bottombar(反向种草劝退) / "
-                             "topbar(垂直人群信任) / magazine(单图大字爆款) / vlog_card(VLOG微透卡片) / "
-                             "list_banner(清单三图横幅)。默认全部 6 种生成")
+                        help="封面风格（逗号分隔，留空=全量12种）。支持: bigtext/bottombar/topbar/magazine/vlog_card/list_banner/"
+                             "split_comparison/frosted_glass/grid_mosaic/polaroid_stack/minimal_banner/bold_highlight")
     parser.add_argument("--cover-title", default=None,
                         help="封面标题文字（默认用二创 Top1 标题）")
     parser.add_argument("--erase-cover-text", action="store_true",
@@ -1444,7 +1443,10 @@ def main(argv=None):
         if args.cover_styles:
             styles = [s.strip() for s in args.cover_styles.split(",") if s.strip()]
         else:
-            styles = config.COVER.get("styles", ["bigtext", "bottombar", "topbar", "magazine", "vlog_card", "list_banner"])
+            styles = config.COVER.get("styles", [
+                "bigtext", "bottombar", "topbar", "magazine", "vlog_card", "list_banner",
+                "split_comparison", "frosted_glass", "grid_mosaic", "polaroid_stack", "minimal_banner", "bold_highlight"
+            ])
 
         # 获取原封面 URL（小红书/抖音视频有，其他来源可能没有）
         cover_url = None
