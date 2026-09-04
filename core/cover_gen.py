@@ -1338,6 +1338,118 @@ def render_bold_highlight_style(base_path: str, title: str, out_path: str, video
     return out_path
 
 
+
+
+def render_sticker_painpoint_style(base_path: str, title: str, out_path: str, video_path: str = None) -> str:
+    """模板 13：居家收纳爆款痛点贴纸风（黄色锯齿爆炸对话框 + 底部黑边超大卖点字）。
+
+    拆解还原：
+      - 画面：居中 100% 留出第一人称场景实拍原图（不被文字大面积遮挡）
+      - 顶部：亮黄色锯齿爆炸对话框/高亮贴纸（黑体重复问句痛点，如“衣柜塞爆了？别慌！”）
+      - 底部：超大白色粗黑体 + 4px 纯黑高对比描边（“告别衣柜拥挤，一扣省下一半！”）
+      - 辅助：底部黄色/白色透明高亮角标（“实测有效 · 不占空间”）
+    """
+    from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
+    import math
+
+    info = _parse_title_for_cover(title)
+    if base_path and os.path.exists(base_path):
+        bg = _fit_crop_image(Image.open(base_path).convert("RGB"), COVER_W, COVER_H)
+    else:
+        photos = _collect_4_photos(base_path, video_path)
+        bg = _create_4grid_canvas(photos)
+
+    # 稍微微调对比度与明亮度，让实拍画面更清晰
+    bg = ImageEnhance.Contrast(bg).enhance(1.08)
+
+    # ===== 1. 顶部：亮黄色锯齿爆炸对话框贴纸 =====
+    top_w = COVER_W - 120  # 960
+    top_h = 210
+    top_x = 60
+    top_y = 70
+
+    # 创建 RGBA 图层
+    overlay = Image.new("RGBA", bg.size, (0, 0, 0, 0))
+    odraw = ImageDraw.Draw(overlay)
+
+    # 生成 16 角锯齿爆炸气泡多边形顶点
+    cx = top_x + top_w / 2
+    cy = top_y + top_h / 2
+    rx = top_w / 2
+    ry = top_h / 2
+
+    n_spikes = 18
+    pts = []
+    for i in range(n_spikes * 2):
+        angle = i * (math.pi / n_spikes)
+        # 偶数点为外凸尖角，奇数点为内凹底点
+        r_scale = 1.0 if (i % 2 == 0) else 0.88
+        px = cx + rx * r_scale * math.cos(angle)
+        py = cy + ry * r_scale * math.sin(angle)
+        pts.append((px, py))
+
+    # 绘制黑色投影
+    shadow_pts = [(x + 6, y + 8) for x, y in pts]
+    odraw.polygon(shadow_pts, fill=(0, 0, 0, 90))
+
+    # 绘制亮黄色爆炸背景 + 黑色粗外框
+    odraw.polygon(pts, fill=(255, 230, 0, 255), outline=(18, 18, 20, 255))
+
+    bg.paste(overlay, (0, 0), overlay)
+
+    # 绘制顶部痛点文字 (黑体重复问句，如“衣柜塞爆了？别慌！”)
+    d = ImageDraw.Draw(bg)
+    font_top = ImageFont.truetype(_find_font(62, bold=True), 62)
+    top_text = f"{info['line1']}？别慌！" if not info['line1'].endswith(("！", "？", "?", "!")) else info['line1']
+
+    bbox_top = d.textbbox((0, 0), top_text, font=font_top)
+    tw = bbox_top[2] - bbox_top[0]
+    th = bbox_top[3] - bbox_top[1]
+    d.text(((COVER_W - tw) // 2, top_y + (top_h - th) // 2 - bbox_top[1]), top_text, font=font_top, fill=(18, 18, 20))
+
+    # ===== 2. 底部：超大白色粗黑体 + 4px 纯黑描边 =====
+    font_main = ImageFont.truetype(_find_font(84, bold=True), 84)
+
+    line1_text = info['line2'] if info['line2'] else "告别拥挤 一扣省一半！"
+    bbox_m1 = d.textbbox((0, 0), line1_text, font=font_main)
+    mw1 = bbox_m1[2] - bbox_m1[0]
+    mh1 = bbox_m1[3] - bbox_m1[1]
+
+    # 如果文字太长自动缩小
+    if mw1 > COVER_W - 80:
+        font_main = ImageFont.truetype(_find_font(70, bold=True), 70)
+        bbox_m1 = d.textbbox((0, 0), line1_text, font=font_main)
+        mw1 = bbox_m1[2] - bbox_m1[0]
+        mh1 = bbox_m1[3] - bbox_m1[1]
+
+    main_y = COVER_H - 280
+
+    # 黑色粗描边辅助函数
+    def _draw_stroke_text(draw, position, text, font, fill_color, stroke_color, stroke_width=5):
+        x, y = position
+        for dx in range(-stroke_width, stroke_width + 1):
+            for dy in range(-stroke_width, stroke_width + 1):
+                if dx * dx + dy * dy <= stroke_width * stroke_width:
+                    draw.text((x + dx, y + dy), text, font=font, fill=stroke_color)
+        draw.text((x, y), text, font=font, fill=fill_color)
+
+    _draw_stroke_text(d, ((COVER_W - mw1) // 2, main_y), line1_text, font=font_main,
+                      fill_color=(255, 255, 255), stroke_color=(10, 10, 15), stroke_width=6)
+
+    # ===== 3. 底部小字辅助信任角标 (“实测有效 · 不占空间”) =====
+    sub_font = ImageFont.truetype(_find_font(34, bold=True), 34)
+    sub_text = f"✔ 实测有效 · {info['sub']}"
+    _draw_large_card(
+        bg, ((COVER_W - 420) // 2, COVER_H - 120), sub_text, sub_font,
+        bg_color=(255, 230, 0, 245), text_color=(18, 18, 20),
+        pad_x=24, pad_y=10, radius=18, shadow_blur=12, shadow_alpha=80
+    )
+
+    bg.save(out_path, quality=98, subsampling=0)
+    logger.info("模板13(收纳痛点贴纸): %s", out_path)
+    return out_path
+
+
 # ---------- 主入口：生成所有风格的封面 ----------
 
 def generate_covers(title: str, cover_url: str = None, video_path: str = None,
@@ -1389,7 +1501,7 @@ def generate_covers(title: str, cover_url: str = None, video_path: str = None,
     os.makedirs(out_dir, exist_ok=True)
 
     if styles is None:
-        styles = ["bigtext", "bottombar", "topbar", "magazine", "vlog_card", "list_banner", "split_comparison", "frosted_glass", "grid_mosaic", "polaroid_stack", "minimal_banner", "bold_highlight"]
+        styles = ["bigtext", "bottombar", "topbar", "magazine", "vlog_card", "list_banner", "split_comparison", "frosted_glass", "grid_mosaic", "polaroid_stack", "minimal_banner", "bold_highlight", "sticker_painpoint"]
 
     # === LLM 生成封面标题（如启用） ===
     title_source = "user"  # 用户指定或二创 Top1
@@ -1493,6 +1605,8 @@ def generate_covers(title: str, cover_url: str = None, video_path: str = None,
                 render_minimal_banner_style(base_for_render, title, out_path, video_path=video_path)
             elif style == "bold_highlight":
                 render_bold_highlight_style(base_for_render, title, out_path, video_path=video_path)
+            elif style == "sticker_painpoint":
+                render_sticker_painpoint_style(base_for_render, title, out_path, video_path=video_path)
             else:
                 logger.warning("未知封面风格: %s", style)
                 continue

@@ -816,8 +816,8 @@ def main(argv=None):
     parser.add_argument("--no-copywrite", action="store_true",
                         help="不生成二创文案（默认生成爆款标题候选 + 正文 + 标签）")
     parser.add_argument("--cover-styles", default=None,
-                        help="封面风格（逗号分隔，留空=全量12种）。支持: bigtext/bottombar/topbar/magazine/vlog_card/list_banner/"
-                             "split_comparison/frosted_glass/grid_mosaic/polaroid_stack/minimal_banner/bold_highlight")
+                        help="封面风格（逗号分隔，留空=全量13种）。支持: bigtext/bottombar/topbar/magazine/vlog_card/list_banner/"
+                             "split_comparison/frosted_glass/grid_mosaic/polaroid_stack/minimal_banner/bold_highlight/sticker_painpoint")
     parser.add_argument("--cover-title", default=None,
                         help="封面标题文字（默认用二创 Top1 标题）")
     parser.add_argument("--erase-cover-text", action="store_true",

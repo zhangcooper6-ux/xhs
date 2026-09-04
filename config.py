@@ -398,8 +398,9 @@ COVER = {
     "enabled": True,            # 是否生成封面（默认开启，--no-cover 关闭）
     "styles": [
         "bigtext", "bottombar", "topbar", "magazine", "vlog_card", "list_banner",
-        "split_comparison", "frosted_glass", "grid_mosaic", "polaroid_stack", "minimal_banner", "bold_highlight"
-    ],  # 生成的风格（全量 12 种小红书爆款纯图像设计模板）
+        "split_comparison", "frosted_glass", "grid_mosaic", "polaroid_stack", "minimal_banner", "bold_highlight",
+        "sticker_painpoint"
+    ],  # 生成的风格（全量 13 种小红书爆款纯图像设计模板）
     "n_titles": 10,             # 文案二创生成的标题候选数量
     "title_max_len": 12,        # 封面标题最大字数（超出截断）
     "frame_time_ratio": 0.3,    # 视频抽帧位置（0.3=跳过片头黑屏）
