@@ -275,6 +275,8 @@ def _build_creative_params(args):
         c["top_hook"] = False
     if args.top_hook_text:
         c["top_hook_text"] = args.top_hook_text
+    if args.top_hook_style:
+        c["top_hook_style"] = args.top_hook_style
     if args.pip:
         c["pip_enabled"] = True
     return c
@@ -620,6 +622,9 @@ def main(argv=None):
                         help="关闭前3秒黄金留存 Hook 标题卡")
     parser.add_argument("--top-hook-text", default=None,
                         help="自定义前3秒 Hook 标题卡文案（留空=优先用二创标题/干净无标签原标题）")
+    parser.add_argument("--top-hook-style", default=None,
+                        choices=["viral_yellow", "viral_red", "clean_white", "kawaii", "kawaii_purple"],
+                        help="前3秒 Hook 标题卡样式: viral_yellow(黄底黑字) / viral_red(红底白字) / clean_white(白底黑字) / kawaii(卡哇伊粉) / kawaii_purple(梦幻紫)")
     parser.add_argument("--caption", default=None,
                         help="自定义字幕条文字（默认自动用笔记标题）")
     parser.add_argument("--caption-style", default=None,

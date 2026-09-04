@@ -33,9 +33,22 @@ def _probe(src_path):
     return w, h, d
 
 
-def _find_font():
-    """找一个支持中文的系统字体。"""
+def _find_font(prefer_cute=False):
+    """找一个支持中文的系统字体（支持偏向可爱卡哇伊/手写圆体字体）。"""
+    if prefer_cute:
+        cute_candidates = [
+            r"C:\Windows\Fonts\STCAIYUN.TTF",  # 华文彩云（可爱圆润）
+            r"C:\Windows\Fonts\STHUAPO.TTF",   # 华文琥珀（胖嘟嘟卡哇伊）
+            r"C:\Windows\Fonts\SIMYOU.TTF",    # 幼圆（经典卡哇伊圆润体）
+            r"C:\Windows\Fonts\FZSTK.TTF",     # 方正舒体
+            r"C:\Windows\Fonts\msyhbd.ttc",    # 微软雅黑 Bold
+        ]
+        for p in cute_candidates:
+            if os.path.exists(p):
+                return p
+
     candidates = [
+        r"C:\Windows\Fonts\msyhbd.ttc",
         r"C:\Windows\Fonts\simhei.ttf",
         r"C:\Windows\Fonts\msyh.ttf",
         r"C:\Windows\Fonts\msyh.ttc",
@@ -221,20 +234,35 @@ def _build_creative_layers(cur_label, fc_parts, extra_inputs, target_w, target_h
         hook_text = re.sub(r"\s+", " ", hook_text)
 
     if top_hook and hook_text:
-        font = _find_font()
+        hook_style = creative.get("top_hook_style", "viral_yellow")
+        prefer_cute = (hook_style == "kawaii")
+        font = _find_font(prefer_cute=prefer_cute)
         if font:
-            hook_style = creative.get("top_hook_style", "viral_yellow")
-            if hook_style == "viral_yellow":
-                bg_col, text_col = "yellow@0.95", "black"
+            # 丰富多变的新潮/卡哇伊/红黄白风格配色
+            if hook_style == "kawaii":
+                bg_col, text_col = "pink@0.95", "white"        # 少女粉底白字 (卡哇伊)
+            elif hook_style == "kawaii_purple":
+                bg_col, text_col = "purple@0.90", "yellow"     # 梦幻紫底黄字 (卡哇伊)
             elif hook_style == "viral_red":
-                bg_col, text_col = "red@0.90", "white"
+                bg_col, text_col = "red@0.90", "white"         # 爆款红底白字
+            elif hook_style == "clean_white":
+                bg_col, text_col = "white@0.95", "black"       # 极简白底黑字
             else:
-                bg_col, text_col = "white@0.95", "black"
+                bg_col, text_col = "yellow@0.95", "black"      # 经典爆款黄底黑字 (viral_yellow)
 
-            bar_h = int(target_h * 0.065)
-            fontsize = int(bar_h * 0.55)
-            bar_y = int(target_h * 0.08)  # 居顶部约 8% 位置，醒目且不挡视频主体
-            text_y = bar_y + (bar_h - fontsize) // 2
+            # 根据文字长度自动计算字号与边距，防止超出视频边界
+            char_count = max(1, len(hook_text))
+            max_usable_w = int(target_w * 0.88)  # 两边留 6% 边距安全区，坚决不超界
+            
+            # 单字估计宽度并动态缩小字号
+            fontsize = int((target_h * 0.065) * 0.55)  # 基础字号 ~42px
+            estimated_tw = char_count * fontsize + 40   # 包含内边距 padding
+            if estimated_tw > max_usable_w:
+                fontsize = int((max_usable_w - 40) / char_count)
+                fontsize = max(24, fontsize)  # 保证最小可读字号 24px
+
+            bar_y = int(target_h * 0.08)  # 居顶部约 8% 位置
+            text_y = bar_y
 
             txt_file = _write_text_file(hook_text, tmp_dir, prefix="hook_")
             wm_files.append(txt_file)
@@ -245,10 +273,10 @@ def _build_creative_layers(cur_label, fc_parts, extra_inputs, target_w, target_h
             fc_parts.append(
                 f"[{cur_label}]drawtext=fontfile='{font_escaped}':"
                 f"textfile='{txt_escaped}':fontsize={fontsize}:"
-                f"fontcolor={text_col}:box=1:boxcolor={bg_col}:boxborderw=18:"
+                f"fontcolor={text_col}:box=1:boxcolor={bg_col}:boxborderw=16:"
                 f"x=(w-tw)/2:y={text_y}:enable='between(t,0,3.5)'[{hook_label}]")
             cur_label = hook_label
-            logger.info("添加前3秒黄金 Hook 标题卡: %s", hook_text[:20])
+            logger.info("添加前3秒黄金 Hook 标题卡(Style=%s, Size=%d): %s", hook_style, fontsize, hook_text[:20])
 
     # ---- 5. 普通字幕条 ----
     if (creative.get("caption_enabled") and
