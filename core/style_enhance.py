@@ -214,7 +214,13 @@ def _build_creative_layers(cur_label, fc_parts, extra_inputs, target_w, target_h
 
     # ---- 4. 爆款 Hook 顶部标题卡（前3秒黄金留存关键）----
     top_hook = creative.get("top_hook", True)
-    if top_hook and caption_text:
+    hook_text = creative.get("top_hook_text") or caption_text
+    if top_hook and hook_text:
+        # 清理 #标签 及其后的多余符号
+        hook_text = re.sub(r"#\S+", "", hook_text).strip()
+        hook_text = re.sub(r"\s+", " ", hook_text)
+
+    if top_hook and hook_text:
         font = _find_font()
         if font:
             hook_style = creative.get("top_hook_style", "viral_yellow")
@@ -230,7 +236,7 @@ def _build_creative_layers(cur_label, fc_parts, extra_inputs, target_w, target_h
             bar_y = int(target_h * 0.08)  # 居顶部约 8% 位置，醒目且不挡视频主体
             text_y = bar_y + (bar_h - fontsize) // 2
 
-            txt_file = _write_text_file(caption_text, tmp_dir, prefix="hook_")
+            txt_file = _write_text_file(hook_text, tmp_dir, prefix="hook_")
             wm_files.append(txt_file)
             txt_escaped = _esc_path(txt_file)
             font_escaped = _esc_path(font)
@@ -240,9 +246,9 @@ def _build_creative_layers(cur_label, fc_parts, extra_inputs, target_w, target_h
                 f"[{cur_label}]drawtext=fontfile='{font_escaped}':"
                 f"textfile='{txt_escaped}':fontsize={fontsize}:"
                 f"fontcolor={text_col}:box=1:boxcolor={bg_col}:boxborderw=18:"
-                f"x=(w-tw)/2:y={text_y}[{hook_label}]")
+                f"x=(w-tw)/2:y={text_y}:enable='between(t,0,3.5)'[{hook_label}]")
             cur_label = hook_label
-            logger.info("添加前3秒黄金 Hook 标题卡: %s", caption_text[:20])
+            logger.info("添加前3秒黄金 Hook 标题卡: %s", hook_text[:20])
 
     # ---- 5. 普通字幕条 ----
     if (creative.get("caption_enabled") and
@@ -313,7 +319,7 @@ def _build_filter_complex(w, h, duration, params, creative=None,
     target_w -= target_w % 2
     target_h -= target_h % 2
 
-    _tmp_dir = tmp_dir or tempfile.gettempdir()
+    _tmp_dir = tmp_dir or getattr(config, 'TEMP_DIR', tempfile.gettempdir())
 
     # === 风格增强层 ===
     # 前景：高精度 Lanczos 缩放 + 调色 + 自然饱和度 + 空域精细降噪 + 3x3 锐化

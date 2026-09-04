@@ -271,6 +271,10 @@ def _build_creative_params(args):
         c["caption_enabled"] = False
     if args.no_noise:
         c["noise_enabled"] = False
+    if args.no_top_hook:
+        c["top_hook"] = False
+    if args.top_hook_text:
+        c["top_hook_text"] = args.top_hook_text
     if args.pip:
         c["pip_enabled"] = True
     return c
@@ -612,6 +616,10 @@ def main(argv=None):
                         help="扫光透明度 0-1（默认 0.05）")
     parser.add_argument("--no-caption", action="store_true",
                         help="关闭底部字幕条")
+    parser.add_argument("--no-top-hook", action="store_true",
+                        help="关闭前3秒黄金留存 Hook 标题卡")
+    parser.add_argument("--top-hook-text", default=None,
+                        help="自定义前3秒 Hook 标题卡文案（留空=优先用二创标题/干净无标签原标题）")
     parser.add_argument("--caption", default=None,
                         help="自定义字幕条文字（默认自动用笔记标题）")
     parser.add_argument("--caption-style", default=None,
@@ -1364,8 +1372,11 @@ def main(argv=None):
              (" + AI配音" if tts_cfg.get("enabled") else "") +
              (" + BGM" if bgm_cfg.get("enabled") else ""))
     log.info("=" * 60)
-    # 字幕条文字：优先用 --caption，否则用笔记标题
-    caption_text = args.caption if args.caption is not None else note.title
+    # 清理标题中的 #标签 与多余符号，作为干净的默认 caption/hook 文本
+    clean_title = re.sub(r"#\S+", "", note.title or "").strip()
+    clean_title = re.sub(r"\s+", " ", clean_title)
+    # 字幕条文字：优先用 --caption，否则用无标签的干净标题
+    caption_text = args.caption if args.caption is not None else clean_title
     subtitle_cfg = _build_subtitle_params(args)
     result = None
     if note.note_type == "video":
