@@ -285,6 +285,8 @@ PARAM_GROUPS = [
              "default": 0.05, "min": 0.0, "max": 1.0, "step": 0.01, "help": "扫光透明度 0-1（默认 0.05）"},
             {"key": "no_caption", "flag": "--no-caption", "label": "关闭字幕条", "type": "bool",
              "default": False, "help": "关闭底部字幕条"},
+            {"key": "no_top_hook", "flag": "--no-top-hook", "label": "关闭前3秒Hook标题卡", "type": "bool",
+             "default": False, "help": "关闭视频顶部前3秒黄金留存Hook标题卡"},
             {"key": "caption", "flag": "--caption", "label": "字幕条文字", "type": "str",
              "default": "", "placeholder": "留空=用笔记标题", "help": "自定义字幕条文字（默认自动用笔记标题）"},
             {"key": "caption_style", "flag": "--caption-style", "label": "字幕条样式", "type": "choice",
