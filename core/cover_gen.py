@@ -333,32 +333,28 @@ def _parse_title_for_cover(title: str) -> dict:
         t = m.group(2).strip()
 
     intent_keywords = [
-        ("废话", "⚡ 没废话", "没废话 · 家居秒物"),
-        ("避坑", "⚠️ 避坑劝退", "踩雷劝退 · 别乱买"),
-        ("垃圾", "💰 反向种草", "少买垃圾 · 多存钱！"),
-        ("少买", "💰 反向种草", "少买垃圾 · 多存钱！"),
-        ("女高", "🎒 私立女高", "新生开学 · 幸福感好物"),
-        ("学生", "📚 校园必看", "开学爱用 · 幸福感好物"),
-        ("无广", "✦ 纯自用无广", "无广！无废物！"),
-        ("爽包", "🎒 出行收纳", "无广！无废物！爽包！"),
-        ("懒鬼", "🧹 清洁好物", "懒鬼必备 · 低至个位数"),
-        ("个位数", "💰 平价神物", "低至个位数 · 纯干货"),
-        ("幸福感", "✨ 幸福感家居", "提升居家幸福感好物"),
-        ("秒物", "🔥 家居秒物", "小众实用居家神器"),
-        ("教程", "⭐ 保姆级教程", "高清完整版 · 看这篇"),
-        ("月入", "🚀 搞钱指南", "保姆级教程 · 建议收藏"),
+        ("收纳", "📦 空间整理", "衣柜收纳日常"),
+        ("衣柜", "👗 衣柜整理", "拯救衣柜空间"),
+        ("避坑", "💡 真实体验", "踩坑心得分享"),
+        ("改造", "🏡 居家改造", "治愈生活角落"),
+        ("好物", "✨ 心动好物", "私藏居家分享"),
+        ("学生", "🎒 宿舍日常", "宿舍好物分享"),
+        ("桌面", "🖥️ 桌面美学", "极简桌面角落"),
+        ("清洁", "🫧 解压清洁", "省心清洁记录"),
+        ("幸福感", "🌿 治愈生活", "提升生活幸福感"),
+        ("测评", "🔍 深度体验", "真实上手细节"),
     ]
 
-    trust_badge = "无广！自用分享！"
-    for kw, default_tag, badge in intent_keywords:
+    content_sub = ""
+    for kw, default_tag, default_sub in intent_keywords:
         if kw in title or kw in t:
             if not tag:
                 tag = default_tag
-            trust_badge = badge
+            content_sub = default_sub
             break
 
     if not tag:
-        tag = "🔥 爆款好物推荐"
+        tag = "✨ 生活灵感"
 
     clean_t = re.sub(r"^[！!，,：: ｜·\-]+", "", t)
     parts = [p.strip() for p in re.split(r"[ ℑ·,，!！?？:：\r\n\t]+", clean_t) if p.strip()]
@@ -366,21 +362,21 @@ def _parse_title_for_cover(title: str) -> dict:
     if len(parts) >= 2:
         l1 = parts[0]
         l2 = parts[1]
-        sub = " ".join(parts[2:]) if len(parts) > 2 else trust_badge
+        sub = " ".join(parts[2:]) if len(parts) > 2 else content_sub
     elif len(parts) == 1:
-        text = parts[0]
-        if len(text) > 7:
-            mid = len(text) // 2
-            l1 = text[:mid]
-            l2 = text[mid:]
+        text_p = parts[0]
+        if len(text_p) > 7:
+            mid = len(text_p) // 2
+            l1 = text_p[:mid]
+            l2 = text_p[mid:]
         else:
-            l1 = text
+            l1 = text_p
             l2 = ""
-        sub = trust_badge
+        sub = content_sub
     else:
-        l1 = "爆款好物推荐"
-        l2 = "不踩雷清单"
-        sub = trust_badge
+        l1 = "生活灵感"
+        l2 = "日常分享"
+        sub = content_sub
 
     if len(l1) > 8:
         l1 = l1[:8]
@@ -394,7 +390,7 @@ def _parse_title_for_cover(title: str) -> dict:
         "line1": l1,
         "line2": l2,
         "sub": sub,
-        "trust_badge": trust_badge
+        "trust_badge": sub
     }
 
 
@@ -665,7 +661,7 @@ def render_bottombar_style(base_path: str, title: str, out_path: str, video_path
     top_font_path = _find_font(36, bold=True)
     top_font = ImageFont.truetype(top_font_path, 36) if top_font_path else ImageFont.load_default()
     _draw_large_card(
-        bg, (50, 70), "⚠️ 避坑劝退 | 建议收藏", top_font,
+        bg, (50, 70), f"💡 {info['tag']}", top_font,
         bg_color=(220, 38, 38, 245), text_color=(255, 255, 255),
         pad_x=24, pad_y=12, radius=22, shadow_blur=8, shadow_alpha=60
     )
@@ -696,7 +692,7 @@ def render_bottombar_style(base_path: str, title: str, out_path: str, video_path
     sub_font_path = _find_font(36, bold=True)
     sub_font = ImageFont.truetype(sub_font_path, 36) if sub_font_path else ImageFont.load_default()
     _draw_large_card(
-        bg, (50, next_y), "“ 别乱买踩坑 · 多存钱！ ”", sub_font,
+        bg, (50, next_y), f"“ {info['sub']} ”" if info['sub'] else "“ 适合自己的才是最好的 ”", sub_font,
         bg_color=(0, 0, 0, 170), text_color=(255, 255, 255),
         pad_x=24, pad_y=12, radius=18, shadow_blur=8, shadow_alpha=60
     )
@@ -730,7 +726,7 @@ def render_topbar_style(base_path: str, title: str, out_path: str, video_path: s
     trust_font_path = _find_font(34, bold=True)
     trust_font = ImageFont.truetype(trust_font_path, 34) if trust_font_path else ImageFont.load_default()
     _draw_large_card(
-        bg, (COVER_W - 350, 60), "无广！无废物！", trust_font,
+        bg, (COVER_W - 350, 60), f"✦ {info['tag']}", trust_font,
         bg_color=(255, 36, 66, 245), text_color=(255, 255, 255),
         pad_x=20, pad_y=12, radius=20, shadow_blur=8, shadow_alpha=60
     )
@@ -759,7 +755,7 @@ def render_topbar_style(base_path: str, title: str, out_path: str, video_path: s
     sub_font_path = _find_font(36, bold=False)
     sub_font = ImageFont.truetype(sub_font_path, 36) if sub_font_path else ImageFont.load_default()
     _draw_large_card(
-        bg, (50, next_y), "自用实拍爽包 · 一次看个够 ✨", sub_font,
+        bg, (50, next_y), f"{info['sub']}" if info['sub'] else "日常好物真实记录", sub_font,
         bg_color=(0, 0, 0, 150), text_color=(240, 240, 245),
         pad_x=22, pad_y=10, radius=18, shadow_blur=6, shadow_alpha=50
     )
@@ -1140,7 +1136,7 @@ def render_grid_mosaic_style(base_path: str, title: str, out_path: str, video_pa
                 cd.text(((cell_w - (bbox2[2] - bbox2[0])) // 2, 220), info["line2"], font=font_title, fill=(255, 230, 0))
 
             font_sub = ImageFont.truetype(_find_font(26, bold=False), 26)
-            cd.text((24, cell_h - 60), "✦ 避坑清单 ✦", font=font_sub, fill=(200, 200, 210))
+            cd.text((24, cell_h - 60), f"✦ {info['tag']} ✦", font=font_sub, fill=(200, 200, 210))
 
             bg.paste(card_img, (cx, cy))
         else:
@@ -1150,7 +1146,7 @@ def render_grid_mosaic_style(base_path: str, title: str, out_path: str, video_pa
     # 顶部分线标
     top_font = ImageFont.truetype(_find_font(36, bold=True), 36)
     _draw_large_card(
-        bg, (40, 40), f"🔥 海量合集 | {info['tag']}", top_font,
+        bg, (40, 40), f"✦ {info['tag']} ✦", top_font,
         bg_color=(255, 36, 66, 245), text_color=(255, 255, 255),
         pad_x=22, pad_y=10, radius=18, shadow_blur=10, shadow_alpha=70
     )
@@ -1249,7 +1245,7 @@ def render_minimal_banner_style(base_path: str, title: str, out_path: str, video
     # 3. 顶部烫金装饰线与标签
     d.line([(80, 50), (COVER_W - 80, 50)], fill=(255, 215, 130, 180), width=2)
     top_font = ImageFont.truetype(_find_font(32, bold=True), 32)
-    top_t = f"— CINEMATIC REPORT · {info['tag']} —"
+    top_t = f"— {info['tag']} · 真实记录 —"
     bbox = d.textbbox((0, 0), top_t, font=top_font)
     d.text(((COVER_W - (bbox[2] - bbox[0])) // 2, 80), top_t, font=top_font, fill=(255, 215, 130))
 
@@ -1286,7 +1282,7 @@ def render_bold_highlight_style(base_path: str, title: str, out_path: str, video
     # 1. 顶部 Tag
     tag_font = ImageFont.truetype(_find_font(36, bold=True), 36)
     _draw_large_card(
-        bg, (50, 70), f"📌 划重点 | {info['tag']}", tag_font,
+        bg, (50, 70), f"✦ {info['tag']}", tag_font,
         bg_color=(20, 20, 24, 240), text_color=(255, 230, 0),
         pad_x=24, pad_y=12, radius=20, shadow_blur=10, shadow_alpha=70
     )
@@ -1473,18 +1469,14 @@ def render_sticker_painpoint_style(base_path: str, title: str, out_path: str, vi
     _draw_deluxe_text(d, main_x, main_y, main_text, font_main,
                       fill_color=(255, 255, 255), stroke_color=(12, 12, 16), stroke_w=8)
 
-    # ===== 5. 底部双色信任角标（增强真实测评感与权威度） =====
-    sub_font = ImageFont.truetype(_find_font(34, bold=True), 34)
-    tag_left = "🔥 真实实测"
-    tag_right = f"✔ {info['sub']}" if info['sub'] else "✔ 告别凌乱"
-
-    # 左侧红底信任标 + 右侧黄底利益标
-    combined_badge = f"{tag_left} · {tag_right}"
-    _draw_large_card(
-        bg, ((COVER_W - 540) // 2, COVER_H - 110), combined_badge, sub_font,
-        bg_color=(255, 230, 0, 255), text_color=(18, 18, 20),
-        pad_x=28, pad_y=12, radius=20, shadow_blur=14, shadow_alpha=90
-    )
+    # ===== 5. 底部小字辅助（如果有用户原本文案就显示，没有就干净留白，绝不加多余营销词） =====
+    if info.get('sub') and len(info['sub'].strip()) > 0:
+        sub_font = ImageFont.truetype(_find_font(34, bold=True), 34)
+        _draw_large_card(
+            bg, ((COVER_W - 460) // 2, COVER_H - 110), info['sub'], sub_font,
+            bg_color=(255, 230, 0, 240), text_color=(18, 18, 20),
+            pad_x=24, pad_y=10, radius=18, shadow_blur=10, shadow_alpha=70
+        )
 
     bg.save(out_path, quality=98, subsampling=0)
     logger.info("模板13(精致升级-收纳痛点贴纸): %s", out_path)
