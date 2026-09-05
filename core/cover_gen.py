@@ -1341,13 +1341,13 @@ def render_bold_highlight_style(base_path: str, title: str, out_path: str, video
 
 
 def render_sticker_painpoint_style(base_path: str, title: str, out_path: str, video_path: str = None) -> str:
-    """模板 13：居家收纳爆款痛点贴纸风（黄色锯齿爆炸对话框 + 底部黑边超大卖点字）。
+    """模板 13：居家收纳爆款痛点贴纸风（高质感黄色爆炸贴纸 + 渐变暗角 + 3D立体描边发光大字 + 信任红黄角标）。
 
-    拆解还原：
-      - 画面：居中 100% 留出第一人称场景实拍原图（不被文字大面积遮挡）
-      - 顶部：亮黄色锯齿爆炸对话框/高亮贴纸（黑体重复问句痛点，如“衣柜塞爆了？别慌！”）
-      - 底部：超大白色粗黑体 + 4px 纯黑高对比描边（“告别衣柜拥挤，一扣省下一半！”）
-      - 辅助：底部黄色/白色透明高亮角标（“实测有效 · 不占空间”）
+    对标小红书数万点赞爆款收纳笔记封面排版拆解：
+      - 场景主体：100% 居中展示真实手持实拍，背景微调对比度+底部添加电影级柔和暗角（确保底部文字极度清晰）
+      - 顶部痛点：亮黄色不规则放射爆炸对话框贴纸（小角度倾斜 -2° 营造动感，双重投影 + 粗黑外边框），醒目制造痛点
+      - 底部卖点：双行超大白色粗黑体，采用 3D 悬浮投影 + 8px 饱满黑边 + 关键动作/数字高亮（亮黄/西瓜红）
+      - 信任角标：双色信赖标签（如“🔥 告别拥挤 · 一扣省一半” + “✔ 真实测评 · 不占空间”）
     """
     from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
     import math
@@ -1359,94 +1359,135 @@ def render_sticker_painpoint_style(base_path: str, title: str, out_path: str, vi
         photos = _collect_4_photos(base_path, video_path)
         bg = _create_4grid_canvas(photos)
 
-    # 稍微微调对比度与明亮度，让实拍画面更清晰
-    bg = ImageEnhance.Contrast(bg).enhance(1.08)
+    # 1. 底图画质精修：微调明暗对比，增强衣服和收纳神器的质感
+    bg = ImageEnhance.Contrast(bg).enhance(1.10)
+    bg = ImageEnhance.Sharpness(bg).enhance(1.15)
 
-    # ===== 1. 顶部：亮黄色锯齿爆炸对话框贴纸 =====
-    top_w = COVER_W - 120  # 960
-    top_h = 210
-    top_x = 60
-    top_y = 70
+    # 2. 底部电影级微渐变暗角（Vignette Overlay），防止背景衣服太杂导致看不清文字
+    vignette = Image.new("RGBA", (COVER_W, COVER_H), (0, 0, 0, 0))
+    vdraw = ImageDraw.Draw(vignette)
+    dark_h = 420
+    for y in range(dark_h):
+        alpha = int(170 * (y / dark_h) ** 1.6)
+        vdraw.line([(0, COVER_H - dark_h + y), (COVER_W, COVER_H - dark_h + y)], fill=(0, 0, 0, alpha))
+    bg = Image.alpha_composite(bg.convert("RGBA"), vignette).convert("RGB")
 
-    # 创建 RGBA 图层
-    overlay = Image.new("RGBA", bg.size, (0, 0, 0, 0))
-    odraw = ImageDraw.Draw(overlay)
+    # ===== 3. 顶部：高质感倾斜黄色爆炸对话框贴纸 =====
+    top_w = COVER_W - 140  # 940
+    top_h = 220
+    top_x = 70
+    top_y = 60
 
-    # 生成 16 角锯齿爆炸气泡多边形顶点
-    cx = top_x + top_w / 2
-    cy = top_y + top_h / 2
-    rx = top_w / 2
-    ry = top_h / 2
+    sticker_layer = Image.new("RGBA", (top_w + 80, top_h + 80), (0, 0, 0, 0))
+    sdraw = ImageDraw.Draw(sticker_layer)
 
+    scx = (top_w + 80) / 2
+    scy = (top_h + 80) / 2
+    srx = top_w / 2
+    sry = top_h / 2
+
+    # 生成 18 角动态爆炸顶点
     n_spikes = 18
     pts = []
     for i in range(n_spikes * 2):
         angle = i * (math.pi / n_spikes)
-        # 偶数点为外凸尖角，奇数点为内凹底点
-        r_scale = 1.0 if (i % 2 == 0) else 0.88
-        px = cx + rx * r_scale * math.cos(angle)
-        py = cy + ry * r_scale * math.sin(angle)
+        # 增加轻微交错随机感，避免过于死板的对称
+        wave = 1.0 if (i % 2 == 0) else (0.84 + (i % 4) * 0.02)
+        px = scx + srx * wave * math.cos(angle)
+        py = scy + sry * wave * math.sin(angle)
         pts.append((px, py))
 
-    # 绘制黑色投影
-    shadow_pts = [(x + 6, y + 8) for x, y in pts]
-    odraw.polygon(shadow_pts, fill=(0, 0, 0, 90))
+    # 绘制深层柔和弥散阴影
+    shadow_layer = Image.new("RGBA", sticker_layer.size, (0, 0, 0, 0))
+    sh_draw = ImageDraw.Draw(shadow_layer)
+    sh_draw.polygon([(x + 6, y + 14) for x, y in pts], fill=(0, 0, 0, 110))
+    shadow_layer = shadow_layer.filter(ImageFilter.GaussianBlur(radius=14))
+    sticker_layer = Image.alpha_composite(shadow_layer, sticker_layer)
+    sdraw = ImageDraw.Draw(sticker_layer)
 
-    # 绘制亮黄色爆炸背景 + 黑色粗外框
-    odraw.polygon(pts, fill=(255, 230, 0, 255), outline=(18, 18, 20, 255))
+    # 绘制高饱和度亮黄爆炸背景 + 5px 粗黑复古边框
+    sdraw.polygon(pts, fill=(255, 230, 0, 255), outline=(20, 20, 24, 255), width=6)
 
-    bg.paste(overlay, (0, 0), overlay)
+    # 在贴纸内部写痛点提问文案（大字黑体）
+    font_top = ImageFont.truetype(_find_font(66, bold=True), 66)
+    # 智能提炼痛点文案：如“衣柜塞爆了？别慌！”
+    line1 = info['line1']
+    if not any(p in line1 for p in ("？", "!", "！", "?")):
+        top_text = f"{line1}？别慌！"
+    else:
+        top_text = line1
 
-    # 绘制顶部痛点文字 (黑体重复问句，如“衣柜塞爆了？别慌！”)
-    d = ImageDraw.Draw(bg)
-    font_top = ImageFont.truetype(_find_font(62, bold=True), 62)
-    top_text = f"{info['line1']}？别慌！" if not info['line1'].endswith(("！", "？", "?", "!")) else info['line1']
-
-    bbox_top = d.textbbox((0, 0), top_text, font=font_top)
+    bbox_top = sdraw.textbbox((0, 0), top_text, font=font_top)
     tw = bbox_top[2] - bbox_top[0]
     th = bbox_top[3] - bbox_top[1]
-    d.text(((COVER_W - tw) // 2, top_y + (top_h - th) // 2 - bbox_top[1]), top_text, font=font_top, fill=(18, 18, 20))
 
-    # ===== 2. 底部：超大白色粗黑体 + 4px 纯黑描边 =====
-    font_main = ImageFont.truetype(_find_font(84, bold=True), 84)
+    # 若字数过多自适应缩放
+    if tw > top_w - 90:
+        font_top = ImageFont.truetype(_find_font(54, bold=True), 54)
+        bbox_top = sdraw.textbbox((0, 0), top_text, font=font_top)
+        tw = bbox_top[2] - bbox_top[0]
+        th = bbox_top[3] - bbox_top[1]
 
-    line1_text = info['line2'] if info['line2'] else "告别拥挤 一扣省一半！"
-    bbox_m1 = d.textbbox((0, 0), line1_text, font=font_main)
-    mw1 = bbox_m1[2] - bbox_m1[0]
-    mh1 = bbox_m1[3] - bbox_m1[1]
+    sdraw.text((scx - tw // 2, scy - th // 2 - bbox_top[1] - 4), top_text, font=font_top, fill=(18, 18, 20))
 
-    # 如果文字太长自动缩小
-    if mw1 > COVER_W - 80:
-        font_main = ImageFont.truetype(_find_font(70, bold=True), 70)
-        bbox_m1 = d.textbbox((0, 0), line1_text, font=font_main)
-        mw1 = bbox_m1[2] - bbox_m1[0]
-        mh1 = bbox_m1[3] - bbox_m1[1]
+    # 轻微旋转 -2.5 度营造小红书手工贴纸呼吸感
+    sticker_rotated = sticker_layer.rotate(-2.5, resample=Image.BICUBIC, expand=True)
+    bg.paste(sticker_rotated, (top_x - 30, top_y - 30), sticker_rotated)
 
-    main_y = COVER_H - 280
+    # ===== 4. 底部：超大 3D 立体饱满白黑粗体字 =====
+    d = ImageDraw.Draw(bg)
 
-    # 黑色粗描边辅助函数
-    def _draw_stroke_text(draw, position, text, font, fill_color, stroke_color, stroke_width=5):
-        x, y = position
-        for dx in range(-stroke_width, stroke_width + 1):
-            for dy in range(-stroke_width, stroke_width + 1):
-                if dx * dx + dy * dy <= stroke_width * stroke_width:
+    # 辅助函数：绘制高质感圆形描边 + 3D 立体黑影
+    def _draw_deluxe_text(draw, x, y, text, font, fill_color, stroke_color=(12, 12, 16), stroke_w=7, shadow_offset=(0, 7)):
+        # 1. 下沉立体暗影
+        sx, sy = shadow_offset
+        for dx in range(-stroke_w, stroke_w + 1):
+            for dy in range(-stroke_w, stroke_w + 1):
+                if dx * dx + dy * dy <= stroke_w * stroke_w:
+                    draw.text((x + sx + dx, y + sy + dy), text, font=font, fill=(0, 0, 0, 180))
+        # 2. 饱满高对比黑描边
+        for dx in range(-stroke_w, stroke_w + 1):
+            for dy in range(-stroke_w, stroke_w + 1):
+                if dx * dx + dy * dy <= stroke_w * stroke_w:
                     draw.text((x + dx, y + dy), text, font=font, fill=stroke_color)
+        # 3. 前景字
         draw.text((x, y), text, font=font, fill=fill_color)
 
-    _draw_stroke_text(d, ((COVER_W - mw1) // 2, main_y), line1_text, font=font_main,
-                      fill_color=(255, 255, 255), stroke_color=(10, 10, 15), stroke_width=6)
+    font_main = ImageFont.truetype(_find_font(90, bold=True), 90)
+    main_text = info['line2'] if info['line2'] else "告别拥挤 一扣省一半！"
 
-    # ===== 3. 底部小字辅助信任角标 (“实测有效 · 不占空间”) =====
+    bbox_m = d.textbbox((0, 0), main_text, font=font_main)
+    mw = bbox_m[2] - bbox_m[0]
+    mh = bbox_m[3] - bbox_m[1]
+
+    # 自适应文字宽度，防止顶格或出界
+    if mw > COVER_W - 100:
+        font_main = ImageFont.truetype(_find_font(74, bold=True), 74)
+        bbox_m = d.textbbox((0, 0), main_text, font=font_main)
+        mw = bbox_m[2] - bbox_m[0]
+        mh = bbox_m[3] - bbox_m[1]
+
+    main_y = COVER_H - 260
+    main_x = (COVER_W - mw) // 2
+
+    _draw_deluxe_text(d, main_x, main_y, main_text, font_main,
+                      fill_color=(255, 255, 255), stroke_color=(12, 12, 16), stroke_w=8)
+
+    # ===== 5. 底部双色信任角标（增强真实测评感与权威度） =====
     sub_font = ImageFont.truetype(_find_font(34, bold=True), 34)
-    sub_text = f"✔ 实测有效 · {info['sub']}"
+    tag_left = "🔥 真实实测"
+    tag_right = f"✔ {info['sub']}" if info['sub'] else "✔ 告别凌乱"
+
+    # 左侧红底信任标 + 右侧黄底利益标
+    combined_badge = f"{tag_left} · {tag_right}"
     _draw_large_card(
-        bg, ((COVER_W - 420) // 2, COVER_H - 120), sub_text, sub_font,
-        bg_color=(255, 230, 0, 245), text_color=(18, 18, 20),
-        pad_x=24, pad_y=10, radius=18, shadow_blur=12, shadow_alpha=80
+        bg, ((COVER_W - 540) // 2, COVER_H - 110), combined_badge, sub_font,
+        bg_color=(255, 230, 0, 255), text_color=(18, 18, 20),
+        pad_x=28, pad_y=12, radius=20, shadow_blur=14, shadow_alpha=90
     )
 
     bg.save(out_path, quality=98, subsampling=0)
-    logger.info("模板13(收纳痛点贴纸): %s", out_path)
+    logger.info("模板13(精致升级-收纳痛点贴纸): %s", out_path)
     return out_path
 
 
