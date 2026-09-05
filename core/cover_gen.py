@@ -1543,7 +1543,16 @@ def generate_covers(title: str, cover_url: str = None, video_path: str = None,
     os.makedirs(out_dir, exist_ok=True)
 
     if styles is None:
-        styles = ["bigtext", "bottombar", "topbar", "magazine", "vlog_card", "list_banner", "split_comparison", "frosted_glass", "grid_mosaic", "polaroid_stack", "minimal_banner", "bold_highlight", "sticker_painpoint"]
+        import config
+        styles = config.COVER.get("styles", [
+            "bigtext", "bottombar", "topbar", "magazine", "vlog_card", "list_banner",
+            "split_comparison", "frosted_glass", "grid_mosaic", "polaroid_stack", "minimal_banner", "bold_highlight",
+            "sticker_painpoint", "keyword_hero", "torn_paper", "post_it_note", "magazine_vogue", "film_strip",
+            "two_thirds_split", "char_boxes", "highlight_pen_dual", "minimal_border", "center_circle",
+            "vertical_text_japan", "asymmetric_3grid", "gradient_capsule", "contrast_duotone", "quote_clean",
+            "washi_tape", "editorial_bold", "spotlight_dark", "retro_stamp", "bubble_talk", "top_tag_bottom_hero",
+            "fresh_clean"
+        ])
 
     # === LLM 生成封面标题（如启用） ===
     title_source = "user"  # 用户指定或二创 Top1
@@ -1620,38 +1629,37 @@ def generate_covers(title: str, cover_url: str = None, video_path: str = None,
         except Exception as e:
             logger.warning("封面底图文字去除失败，回退到原图: %s", e)
 
+    # 聚合 35 款封面风格渲染函数
+    from core.cover_templates_extra import EXTRA_COVER_RENDERERS
+
+    base_renderers = {
+        "bigtext": render_bigtext_style,
+        "bottombar": render_bottombar_style,
+        "topbar": render_topbar_style,
+        "magazine": render_magazine_style,
+        "vlog_card": render_vlog_card_style,
+        "list_banner": render_list_banner_style,
+        "split_comparison": render_split_comparison_style,
+        "frosted_glass": render_frosted_glass_style,
+        "grid_mosaic": render_grid_mosaic_style,
+        "polaroid_stack": render_polaroid_stack_style,
+        "minimal_banner": render_minimal_banner_style,
+        "bold_highlight": render_bold_highlight_style,
+        "sticker_painpoint": render_sticker_painpoint_style,
+    }
+    all_renderers = {**base_renderers, **EXTRA_COVER_RENDERERS}
+
+    if styles is None:
+        styles = list(all_renderers.keys())
+
     for style in styles:
+        if style not in all_renderers:
+            logger.warning("未知封面风格: %s", style)
+            continue
         out_path = os.path.join(out_dir, f"cover_{style}.jpg")
         try:
-            if style == "bigtext":
-                render_bigtext_style(base_for_render, title, out_path, video_path=video_path)
-            elif style == "bottombar":
-                render_bottombar_style(base_for_render, title, out_path, video_path=video_path)
-            elif style == "topbar":
-                render_topbar_style(base_for_render, title, out_path, video_path=video_path)
-            elif style == "magazine":
-                render_magazine_style(base_for_render, title, out_path, video_path=video_path)
-            elif style == "vlog_card":
-                render_vlog_card_style(base_for_render, title, out_path, video_path=video_path)
-            elif style == "list_banner":
-                render_list_banner_style(base_for_render, title, out_path, video_path=video_path)
-            elif style == "split_comparison":
-                render_split_comparison_style(base_for_render, title, out_path, video_path=video_path)
-            elif style == "frosted_glass":
-                render_frosted_glass_style(base_for_render, title, out_path, video_path=video_path)
-            elif style == "grid_mosaic":
-                render_grid_mosaic_style(base_for_render, title, out_path, video_path=video_path)
-            elif style == "polaroid_stack":
-                render_polaroid_stack_style(base_for_render, title, out_path, video_path=video_path)
-            elif style == "minimal_banner":
-                render_minimal_banner_style(base_for_render, title, out_path, video_path=video_path)
-            elif style == "bold_highlight":
-                render_bold_highlight_style(base_for_render, title, out_path, video_path=video_path)
-            elif style == "sticker_painpoint":
-                render_sticker_painpoint_style(base_for_render, title, out_path, video_path=video_path)
-            else:
-                logger.warning("未知封面风格: %s", style)
-                continue
+            renderer = all_renderers[style]
+            renderer(base_for_render, title, out_path, video_path=video_path)
             covers[style] = out_path
         except Exception as e:
             logger.error("生成 %s 风格封面失败: %s", style, e)

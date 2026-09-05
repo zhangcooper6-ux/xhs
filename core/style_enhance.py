@@ -8,6 +8,7 @@
 全部在 ffmpeg filter_complex 里完成，不需要手工剪映。
 """
 import os
+import re
 import json
 import random
 import logging

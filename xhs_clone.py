@@ -812,12 +812,15 @@ def main(argv=None):
                         help="列出合法免版税音乐来源（Pixabay/Bensound/FMA 等）")
     # 封面生成 + 文案二创
     parser.add_argument("--no-cover", action="store_true",
-                        help="不生成封面（默认生成全量 12 种小红书爆款视觉设计封面 + 保留原封面）")
+                        help="不生成封面（默认生成全量 35 种小红书高级纯排版设计封面 + 保留原封面）")
     parser.add_argument("--no-copywrite", action="store_true",
                         help="不生成二创文案（默认生成爆款标题候选 + 正文 + 标签）")
     parser.add_argument("--cover-styles", default=None,
-                        help="封面风格（逗号分隔，留空=全量13种）。支持: bigtext/bottombar/topbar/magazine/vlog_card/list_banner/"
-                             "split_comparison/frosted_glass/grid_mosaic/polaroid_stack/minimal_banner/bold_highlight/sticker_painpoint")
+                        help="封面风格（逗号分隔，留空=全量35种）。支持: bigtext/bottombar/topbar/magazine/vlog_card/list_banner/"
+                             "split_comparison/frosted_glass/grid_mosaic/polaroid_stack/minimal_banner/bold_highlight/sticker_painpoint/"
+                             "keyword_hero/torn_paper/post_it_note/magazine_vogue/film_strip/two_thirds_split/char_boxes/highlight_pen_dual/"
+                             "minimal_border/center_circle/vertical_text_japan/asymmetric_3grid/gradient_capsule/contrast_duotone/quote_clean/"
+                             "washi_tape/editorial_bold/spotlight_dark/retro_stamp/bubble_talk/top_tag_bottom_hero/fresh_clean")
     parser.add_argument("--cover-title", default=None,
                         help="封面标题文字（默认用二创 Top1 标题）")
     parser.add_argument("--erase-cover-text", action="store_true",

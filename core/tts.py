@@ -1730,7 +1730,7 @@ def apply_voiceover(video_path, text, out_path, voice="xiaoxiao",
         logger.warning("配音文本为空，跳过")
         return None
 
-    _tmp = tmp_dir or tempfile.gettempdir()
+    _tmp = tmp_dir or getattr(config, 'TEMP_DIR', tempfile.gettempdir())
     os.makedirs(_tmp, exist_ok=True)
 
     # 1. 生成配音 (支持 S2S 变声 或 标准 TTS)

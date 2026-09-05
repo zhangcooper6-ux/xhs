@@ -321,7 +321,8 @@ def mix_bgm_into_video(video_path, bgm_path, out_path,
         return None
 
     import tempfile
-    _tmp = tmp_dir or tempfile.gettempdir()
+    import config
+    _tmp = tmp_dir or getattr(config, 'TEMP_DIR', tempfile.gettempdir())
     os.makedirs(_tmp, exist_ok=True)
 
     # 步骤1：把 BGM 循环+截断到视频时长，并加淡入淡出，输出为临时音频
