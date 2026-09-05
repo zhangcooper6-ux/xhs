@@ -1157,66 +1157,75 @@ def render_grid_mosaic_style(base_path: str, title: str, out_path: str, video_pa
 
 
 def render_polaroid_stack_style(base_path: str, title: str, out_path: str, video_path: str = None) -> str:
-    """模板 10：复古拍立得胶片手写风（拍立得相框/随手拍/博主自用/复古）。
+    """模板 10：拍立得胶片风（大留白拍立得白框 + 纯粹真实自拍感）。
 
-    特点：燕麦质感背景 + 拍立得相框 + 底部留白手写体 + 顶部标签。
+    去油去营销：
+      - 彻底去除“DATE:”、“🔥 自用实拍”等机械营销水印
+      - 留白处只保留干净有力的笔记核心标题，极简大气，符合小红书年轻审美
     """
     from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
     info = _parse_title_for_cover(title)
     photos = _collect_4_photos(base_path, video_path)
 
-    # 燕麦色暖质感背景
-    bg = Image.new("RGB", (COVER_W, COVER_H), (244, 240, 234))
+    # 燕麦色暖质感极简纯净背景
+    bg = Image.new("RGB", (COVER_W, COVER_H), (244, 241, 236))
 
-    # 拍立得白框尺寸
-    frame_w = 900
-    frame_h = 1060
+    # 拍立得白框尺寸（加大相框留白比例，极简高级感）
+    frame_w = 920
+    frame_h = 1200
     fx = (COVER_W - frame_w) // 2
-    fy = 220
+    fy = (COVER_H - frame_h) // 2 + 10
 
-    # 1. 拍立得卡片高斯阴影
+    # 1. 拍立得相纸柔和下沉阴影
     shadow = Image.new("RGBA", bg.size, (0, 0, 0, 0))
     sd = ImageDraw.Draw(shadow)
-    sd.rounded_rectangle([(fx, fy + 8), (fx + frame_w, fy + frame_h + 8)], radius=18, fill=(0, 0, 0, 60))
-    shadow = shadow.filter(ImageFilter.GaussianBlur(radius=16))
+    sd.rounded_rectangle([(fx, fy + 10), (fx + frame_w, fy + frame_h + 10)], radius=16, fill=(0, 0, 0, 45))
+    shadow = shadow.filter(ImageFilter.GaussianBlur(radius=20))
     bg.paste(shadow, (0, 0), shadow)
 
-    # 2. 拍立得白框主体
+    # 2. 拍立得白卡相纸
     polaroid = Image.new("RGB", (frame_w, frame_h), (255, 255, 255))
     pd = ImageDraw.Draw(polaroid)
 
-    # 拍立得内嵌照片 (上方)
-    photo_w = 830
-    photo_h = 750
+    # 拍立得内嵌大照片 (居中上方)
+    photo_w = 840
+    photo_h = 900
     photo_x = (frame_w - photo_w) // 2
-    photo_y = 35
+    photo_y = 40
 
     photo_img = _fit_crop_image(photos[0], photo_w, photo_h)
     polaroid.paste(photo_img, (photo_x, photo_y))
 
-    # 拍立得下方留白文字区域
-    font_main = ImageFont.truetype(_find_font(68, bold=True), 68)
+    # 3. 拍立得下方宽留白区域：只放干净的核心标题
+    font_main = ImageFont.truetype(_find_font(72, bold=True), 72)
     full_t = f"{info['line1']} {info['line2']}" if info['line2'] else info['line1']
     bbox = pd.textbbox((0, 0), full_t, font=font_main)
-    pd.text(((frame_w - (bbox[2] - bbox[0])) // 2, photo_y + photo_h + 40), full_t, font=font_main, fill=(28, 28, 32))
+    tw = bbox[2] - bbox[0]
+    th = bbox[3] - bbox[1]
 
-    font_sub = ImageFont.truetype(_find_font(32, bold=False), 32)
-    sub_t = f"DATE: 2025.08 · {info['sub']}"
-    pd.text((photo_x, frame_h - 70), sub_t, font=font_sub, fill=(130, 130, 140))
+    # 自适应缩放
+    if tw > photo_w - 40:
+        font_main = ImageFont.truetype(_find_font(58, bold=True), 58)
+        bbox = pd.textbbox((0, 0), full_t, font=font_main)
+        tw = bbox[2] - bbox[0]
+        th = bbox[3] - bbox[1]
+
+    text_y = photo_y + photo_h + (frame_h - (photo_y + photo_h) - th) // 2 - bbox[1]
+    pd.text(((frame_w - tw) // 2, text_y), full_t, font=font_main, fill=(28, 28, 32))
 
     bg.paste(polaroid, (fx, fy))
 
-    # 3. 顶部爆款标签
-    top_font = ImageFont.truetype(_find_font(36, bold=True), 36)
+    # 4. 顶部左上角只有极简的氛围胶囊（如 👗 衣柜整理），拒绝任何推销标签
+    top_font = ImageFont.truetype(_find_font(34, bold=True), 34)
     _draw_large_card(
-        bg, (50, 70), f"🔥 自用实拍 | {info['tag']}", top_font,
-        bg_color=(255, 36, 66, 245), text_color=(255, 255, 255),
-        pad_x=24, pad_y=12, radius=20, shadow_blur=10, shadow_alpha=70
+        bg, (50, 50), info['tag'], top_font,
+        bg_color=(255, 255, 255, 235), text_color=(30, 30, 35),
+        pad_x=22, pad_y=10, radius=18, shadow_blur=8, shadow_alpha=40
     )
 
     bg.save(out_path, quality=98, subsampling=0)
-    logger.info("模板10(拍立得): %s", out_path)
+    logger.info("模板10(纯净极简拍立得): %s", out_path)
     return out_path
 
 
