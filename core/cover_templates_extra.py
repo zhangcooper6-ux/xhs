@@ -819,6 +819,197 @@ def render_fresh_clean_style(base_path: str, title: str, out_path: str, video_pa
 
 
 # 额外扩展模版注册表字典
+
+
+def render_checklist_tick_style(base_path: str, title: str, out_path: str, video_path: str = None) -> str:
+    """模板 36：清单实测打勾风（带 3 个小圆点对勾项，信息量与干货感极强，诱发高点击与高收藏）。"""
+    _find_font, _fit_crop_image, _collect_4_photos, _, _draw_large_card, _parse_title_for_cover, logger = _get_helper_imports()
+    info = _parse_title_for_cover(title)
+    photos = _collect_4_photos(base_path, video_path)
+    bg = _fit_crop_image(photos[0], COVER_W, COVER_H)
+
+    # 底部微暗遮罩
+    overlay = Image.new("RGBA", (COVER_W, COVER_H), (0, 0, 0, 0))
+    odraw = ImageDraw.Draw(overlay)
+    for y in range(480):
+        odraw.line([(0, COVER_H - 480 + y), (COVER_W, COVER_H - 480 + y)], fill=(0, 0, 0, int(210 * (y / 480))))
+    bg = Image.alpha_composite(bg.convert("RGBA"), overlay).convert("RGB")
+
+    # 1. 顶部生活灵感胶囊
+    top_font = ImageFont.truetype(_find_font(34, bold=True), 34)
+    _draw_large_card(bg, (50, 60), info["tag"], top_font, bg_color=(255, 230, 0, 245), text_color=(20, 20, 25), pad_x=22, pad_y=10, radius=18)
+
+    # 2. 底部大标题
+    d = ImageDraw.Draw(bg)
+    font_main = ImageFont.truetype(_find_font(80, bold=True), 80)
+    full_t = f"{info['line1']} {info['line2']}" if info['line2'] else info['line1']
+    bbox = d.textbbox((0, 0), full_t, font=font_main)
+    tw = bbox[2] - bbox[0]
+    d.text((60, COVER_H - 400), full_t, font=font_main, fill=(255, 255, 255))
+
+    # 3. 仿小红书笔记 3 个实测对勾清单
+    check_font = ImageFont.truetype(_find_font(34, bold=True), 34)
+    bullets = ["省出50%空间", "不压衣物不变形", "换季拿取超顺手"]
+    cy = COVER_H - 280
+    for b in bullets:
+        # 绿色/黄色小圆点对勾
+        d.ellipse([(60, cy + 4), (60 + 28, cy + 32)], fill=(255, 230, 0))
+        d.text((66, cy + 2), "✔", font=check_font, fill=(20, 20, 25))
+        d.text((105, cy), b, font=check_font, fill=(235, 235, 240))
+        cy += 50
+
+    bg.save(out_path, quality=98, subsampling=0)
+    logger.info("模板36(清单打勾): %s", out_path)
+    return out_path
+
+
+def render_question_curiosity_style(base_path: str, title: str, out_path: str, video_path: str = None) -> str:
+    """模板 37：痛点大问号悬念风（巨大亮黄立体问号？+ 悬念式短句，好奇心点击率极高）。"""
+    _find_font, _fit_crop_image, _collect_4_photos, _, _draw_large_card, _parse_title_for_cover, logger = _get_helper_imports()
+    info = _parse_title_for_cover(title)
+    photos = _collect_4_photos(base_path, video_path)
+    bg = _fit_crop_image(photos[0], COVER_W, COVER_H)
+
+    # 顶部巨大立体问号（180px 巨型荧光黄）
+    d = ImageDraw.Draw(bg)
+    q_font = ImageFont.truetype(_find_font(180, bold=True), 180)
+    # 问号立体阴影
+    d.text((70, 70), "？", font=q_font, fill=(0, 0, 0, 160))
+    d.text((64, 64), "？", font=q_font, fill=(255, 230, 0))
+
+    # 问号右侧紧跟场景标签
+    top_font = ImageFont.truetype(_find_font(38, bold=True), 38)
+    _draw_large_card(bg, (230, 100), info["tag"], top_font, bg_color=(20, 20, 25, 240), text_color=(255, 255, 255), pad_x=24, pad_y=12, radius=18)
+
+    # 底部下沉悬念式双色积木字
+    font_main = ImageFont.truetype(_find_font(86, bold=True), 86)
+    w1, h1 = _draw_large_card(bg, (60, COVER_H - 330), info["line1"], font_main,
+                              bg_color=(255, 230, 0, 255), text_color=(20, 20, 25), pad_x=36, pad_y=18, radius=22, shadow_blur=14, shadow_alpha=100)
+
+    if info["line2"]:
+        _draw_large_card(bg, (60, COVER_H - 330 + h1 + 16), info["line2"], font_main,
+                         bg_color=(20, 20, 25, 245), text_color=(255, 255, 255), pad_x=36, pad_y=18, radius=22, shadow_blur=14, shadow_alpha=100)
+
+    bg.save(out_path, quality=98, subsampling=0)
+    logger.info("模板37(悬念大问号): %s", out_path)
+    return out_path
+
+
+def render_diagonal_slash_style(base_path: str, title: str, out_path: str, video_path: str = None) -> str:
+    """模板 38：斜切几何色块撞击风（-8°斜角交错双色底块，打破死板横平竖直，视觉动感强）。"""
+    _find_font, _fit_crop_image, _collect_4_photos, _, _, _parse_title_for_cover, logger = _get_helper_imports()
+    info = _parse_title_for_cover(title)
+    photos = _collect_4_photos(base_path, video_path)
+    bg = _fit_crop_image(photos[0], COVER_W, COVER_H)
+
+    # 制作两块倾斜的色块条
+    font_main = ImageFont.truetype(_find_font(84, bold=True), 84)
+
+    # 建立倾斜画板
+    slash_layer = Image.new("RGBA", (COVER_W + 200, 400), (0, 0, 0, 0))
+    sdraw = ImageDraw.Draw(slash_layer)
+
+    # 第一行色块 (荧光黄)
+    t1 = info["line1"]
+    bbox1 = sdraw.textbbox((0, 0), t1, font=font_main)
+    w1, h1 = bbox1[2] - bbox1[0], bbox1[3] - bbox1[1]
+    sdraw.rounded_rectangle([(60, 40), (60 + w1 + 60, 40 + h1 + 28)], radius=18, fill=(255, 230, 0, 255))
+    sdraw.text((90 - bbox1[0], 54 - bbox1[1]), t1, font=font_main, fill=(20, 20, 25))
+
+    # 第二行色块 (纯黑底白字)
+    t2 = info["line2"] if info["line2"] else "实用日常清单"
+    bbox2 = sdraw.textbbox((0, 0), t2, font=font_main)
+    w2, h2 = bbox2[2] - bbox2[0], bbox2[3] - bbox2[1]
+    sdraw.rounded_rectangle([(100, 40 + h1 + 45), (100 + w2 + 60, 40 + h1 + 45 + h2 + 28)], radius=18, fill=(20, 20, 25, 250))
+    sdraw.text((130 - bbox2[0], 40 + h1 + 59 - bbox2[1]), t2, font=font_main, fill=(255, 255, 255))
+
+    # 整体逆时针旋转 -4.5 度营造破格张力
+    slash_rot = slash_layer.rotate(-4.5, resample=Image.BICUBIC, expand=True)
+    bg.paste(slash_rot, (-40, COVER_H - 450), slash_rot)
+
+    bg.save(out_path, quality=98, subsampling=0)
+    logger.info("模板38(斜切几何色块): %s", out_path)
+    return out_path
+
+
+def render_circular_stamp_badge_style(base_path: str, title: str, out_path: str, video_path: str = None) -> str:
+    """模板 39：复古双环圆标火漆勋章风（右上角悬浮红/黄双环火漆印章，提升美学格调）。"""
+    _find_font, _fit_crop_image, _collect_4_photos, _, _draw_large_card, _parse_title_for_cover, logger = _get_helper_imports()
+    info = _parse_title_for_cover(title)
+    photos = _collect_4_photos(base_path, video_path)
+    bg = _fit_crop_image(photos[0], COVER_W, COVER_H)
+
+    # 1. 右上角精美双圈圆环印章 (180x180)
+    stamp_size = 170
+    stamp_img = Image.new("RGBA", (stamp_size, stamp_size), (0, 0, 0, 0))
+    sdraw = ImageDraw.Draw(stamp_img)
+    # 外圈
+    sdraw.ellipse([(2, 2), (stamp_size - 2, stamp_size - 2)], outline=(255, 230, 0, 250), width=4)
+    # 内圈
+    sdraw.ellipse([(14, 14), (stamp_size - 14, stamp_size - 14)], outline=(255, 230, 0, 200), width=2)
+    # 填充半透明深黑
+    sdraw.ellipse([(16, 16), (stamp_size - 16, stamp_size - 16)], fill=(20, 20, 25, 220))
+    # 印章文字
+    s_font = ImageFont.truetype(_find_font(34, bold=True), 34)
+    sdraw.text((45, 42), "生活", font=s_font, fill=(255, 230, 0))
+    sdraw.text((45, 85), "精选", font=s_font, fill=(255, 230, 0))
+
+    # 印章倾斜 8 度并贴上
+    stamp_rot = stamp_img.rotate(8, resample=Image.BICUBIC, expand=True)
+    bg.paste(stamp_rot, (COVER_W - stamp_rot.size[0] - 60, 60), stamp_rot)
+
+    # 2. 底部优雅大字
+    font_main = ImageFont.truetype(_find_font(84, bold=True), 84)
+    _draw_large_card(bg, (60, COVER_H - 300), info["line1"], font_main,
+                     bg_color=(255, 255, 255, 250), text_color=(25, 25, 30), pad_x=38, pad_y=20, radius=22, shadow_blur=16, shadow_alpha=90)
+    if info["line2"]:
+        _draw_large_card(bg, (60, COVER_H - 160), info["line2"], font_main,
+                         bg_color=(255, 230, 0, 255), text_color=(20, 20, 25), pad_x=38, pad_y=20, radius=22, shadow_blur=16, shadow_alpha=90)
+
+    bg.save(out_path, quality=98, subsampling=0)
+    logger.info("模板39(复古双环圆标): %s", out_path)
+    return out_path
+
+
+def render_handdrawn_border_style(base_path: str, title: str, out_path: str, video_path: str = None) -> str:
+    """模板 40：手绘星芒随笔风（手绘质感双层框 + 标题两侧伴有 ✨ 闪光手绘星芒）。"""
+    _find_font, _fit_crop_image, _collect_4_photos, _, _, _parse_title_for_cover, logger = _get_helper_imports()
+    info = _parse_title_for_cover(title)
+    photos = _collect_4_photos(base_path, video_path)
+    bg = _fit_crop_image(photos[0], COVER_W, COVER_H)
+
+    # 绘制手绘感外边框
+    d = ImageDraw.Draw(bg)
+    margin = 50
+    d.rectangle([(margin, margin), (COVER_W - margin, COVER_H - margin)], outline=(255, 255, 255, 220), width=3)
+    d.rectangle([(margin + 8, margin + 8), (COVER_W - margin - 8, COVER_H - margin - 8)], outline=(255, 255, 255, 140), width=1)
+
+    # 底部手绘卡片
+    card_w, card_h = COVER_W - margin * 2 - 40, 220
+    cx = margin + 20
+    cy = COVER_H - margin - card_h - 40
+
+    card = Image.new("RGBA", (card_w, card_h), (255, 255, 255, 235))
+    cdraw = ImageDraw.Draw(card)
+    cdraw.rectangle([(2, 2), (card_w - 2, card_h - 2)], outline=(30, 30, 35), width=2)
+
+    font_main = ImageFont.truetype(_find_font(74, bold=True), 74)
+    full_t = f"✨ {info['line1']} {info['line2']} ✨" if info['line2'] else f"✨ {info['line1']} ✨"
+    bbox = cdraw.textbbox((0, 0), full_t, font=font_main)
+    tw = bbox[2] - bbox[0]
+    cdraw.text(((card_w - tw) // 2, 45), full_t, font=font_main, fill=(25, 25, 30))
+
+    if info["sub"]:
+        sub_font = ImageFont.truetype(_find_font(34, bold=False), 34)
+        sbox = cdraw.textbbox((0, 0), info["sub"], font=sub_font)
+        cdraw.text(((card_w - (sbox[2] - sbox[0])) // 2, 140), info["sub"], font=sub_font, fill=(110, 110, 120))
+
+    bg.paste(card, (cx, cy), card)
+    bg.save(out_path, quality=98, subsampling=0)
+    logger.info("模板40(手绘星芒): %s", out_path)
+    return out_path
+
+
 EXTRA_COVER_RENDERERS = {
     "keyword_hero": render_keyword_hero_style,
     "torn_paper": render_torn_paper_style,
@@ -842,4 +1033,9 @@ EXTRA_COVER_RENDERERS = {
     "bubble_talk": render_bubble_talk_style,
     "top_tag_bottom_hero": render_top_tag_bottom_hero_style,
     "fresh_clean": render_fresh_clean_style,
+    "checklist_tick": render_checklist_tick_style,
+    "question_curiosity": render_question_curiosity_style,
+    "diagonal_slash": render_diagonal_slash_style,
+    "circular_stamp_badge": render_circular_stamp_badge_style,
+    "handdrawn_border": render_handdrawn_border_style,
 }
