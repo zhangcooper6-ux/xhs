@@ -396,6 +396,7 @@ FILTER = {
 # ---------- 封面生成 ----------
 COVER = {
     "enabled": True,            # 是否生成封面（默认开启，--no-cover 关闭）
+    "size": "1080x1440",        # 默认非AI封面输出尺寸（支持 800x800, 1080x1440, 1024x1024, 1080x1080 等）
     "styles": [
         "bigtext", "bottombar", "topbar", "magazine", "vlog_card", "list_banner",
         "split_comparison", "frosted_glass", "grid_mosaic", "polaroid_stack", "minimal_banner", "bold_highlight",

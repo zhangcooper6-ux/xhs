@@ -824,6 +824,9 @@ def main(argv=None):
                              "checklist_tick/question_curiosity/diagonal_slash/circular_stamp_badge/handdrawn_border")
     parser.add_argument("--cover-title", default=None,
                         help="封面标题文字（默认用二创 Top1 标题）")
+    parser.add_argument("--cover-size", default=None,
+                        help="非AI封面输出尺寸: 800x800 / 1080x1440(默认) / 1024x1024 / 1080x1080 / 960x1280。"
+                             "若未显式指定且配置了 --ai-cover-size，则自动同步")
     parser.add_argument("--erase-cover-text", action="store_true",
                         help="去除底图上原有的文字（标题/水印/作者名等）再合成新封面。"
                              "用 PaddleOCR 检测文字 + cv2.inpaint 修复，需安装 paddleocr。"
@@ -1518,6 +1521,7 @@ def main(argv=None):
         erase_tag = " [去文字]" if args.erase_cover_text else ""
         log.info("生成封面%s%s（%d 种风格）: 标题=%s",
                  llm_cover_tag, erase_tag, len(styles), cover_title)
+        chosen_cover_size = args.cover_size or args.ai_cover_size or config.COVER.get("size", "1080x1440")
         try:
             cover_result = cover_gen.generate_covers(
                 cover_title, cover_url, video_path_for_cover, out_dir, styles,
@@ -1526,7 +1530,8 @@ def main(argv=None):
                 tags=note.tags, subtitle_text=subtitle_text_for_llm,
                 image_params=iparams,
                 erase_base_text=args.erase_cover_text,
-                cover_local=cover_local)
+                cover_local=cover_local,
+                cover_size=chosen_cover_size)
             # LLM 可能重新生成了封面标题
             if cover_result.get("title_source") == "llm":
                 log.info("LLM 封面标题: %s", cover_result.get("title"))

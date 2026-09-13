@@ -1501,7 +1501,8 @@ def generate_covers(title: str, cover_url: str = None, video_path: str = None,
                      tags: List[str] = None, subtitle_text: str = None,
                      image_params: dict = None,
                      erase_base_text: bool = False,
-                     cover_local: str = None) -> dict:
+                     cover_local: str = None,
+                     cover_size: str = None) -> dict:
     """生成封面（保留原封面 + 原封面去重版 + 多种风格新封面）。
 
     参数:
@@ -1524,6 +1525,8 @@ def generate_covers(title: str, cover_url: str = None, video_path: str = None,
                       原封面副本(cover_原封面.jpg)始终保留原始内容不受影响。
         cover_local: 解析阶段已下载的原封面本地路径（如抖音/小红书下载目录下的
                       cover_original.jpg）。优先复用，避免重复下载。None=从 cover_url 下载。
+        cover_size: 封面输出尺寸（如 "800x800" / "1080x1440" / "1024x1024" 等）。
+                    留空则默认从 config.COVER["size"] 读取。
     返回:
         {
             "original": str,          # 原封面路径（None=无）
@@ -1652,6 +1655,19 @@ def generate_covers(title: str, cover_url: str = None, video_path: str = None,
     if styles is None:
         styles = list(all_renderers.keys())
 
+    # 解析目标封面尺寸 (如 800x800, 1080x1440, 1024x1024)
+    target_w, target_h = 1080, 1440
+    if not cover_size:
+        import config
+        cover_size = config.COVER.get("size", "1080x1440")
+    if cover_size:
+        try:
+            parts = cover_size.lower().replace(" ", "").split("x")
+            if len(parts) == 2:
+                target_w, target_h = int(parts[0]), int(parts[1])
+        except Exception:
+            target_w, target_h = 1080, 1440
+
     for style in styles:
         if style not in all_renderers:
             logger.warning("未知封面风格: %s", style)
@@ -1660,6 +1676,12 @@ def generate_covers(title: str, cover_url: str = None, video_path: str = None,
         try:
             renderer = all_renderers[style]
             renderer(base_for_render, title, out_path, video_path=video_path)
+            # 若请求了非 1080x1440 尺寸（如 800x800 或 1024x1024），自动进行高保真 Lanczos 等比重塑
+            if os.path.exists(out_path) and (target_w, target_h) != (1080, 1440):
+                im = Image.open(out_path)
+                if im.size != (target_w, target_h):
+                    im_resized = im.resize((target_w, target_h), Image.LANCZOS)
+                    im_resized.save(out_path, quality=98, subsampling=0)
             covers[style] = out_path
         except Exception as e:
             logger.error("生成 %s 风格封面失败: %s", style, e)
