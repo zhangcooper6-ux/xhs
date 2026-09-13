@@ -839,7 +839,7 @@ def main(argv=None):
                         help="AI 封面风格（逗号分隔）: product_hero/before_after/hook_closeup/"
                             "scene_lifestyle/list_infographic/emotion_card/pain_scenario。默认全部生成")
     parser.add_argument("--ai-cover-size", default=None,
-                        help="AI 生图尺寸: 1024x1024(默认) / 960x1280 / 720x1080(豆包) / "
+                        help="AI 生图尺寸: 800x800 / 1024x1024(默认) / 960x1280 / 720x1080(豆包) / "
                             "1792x1024 / 1024x1792(DALL-E 3)")
     parser.add_argument("--list-ai-covers", action="store_true",
                         help="列出全部 AI 生图封面风格")
