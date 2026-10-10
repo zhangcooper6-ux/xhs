@@ -24,6 +24,8 @@ models/
 
 # Sensitive Local Config & Custom Presets
 config/custom_presets.json
+config/llm_config.json
+config/
 
 # Test Artifacts & Media Samples
 test_voice.mp3
